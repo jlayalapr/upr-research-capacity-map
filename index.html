@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UPR Research Capacity Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<!-- ===================== PORTADA ===================== -->
+<div id="landing" class="landing" hidden>
+  <div class="l-wrap">
+    <header class="l-nav">
+      <a class="brand" href="#/"><svg viewBox="0 0 40 40" aria-hidden="true"><rect x="1" y="1" width="38" height="38" rx="10" fill="#f5c445"/><path d="M20 6l4.5 5.5V15h-9v-3.5z" fill="#0b2c5f"/><rect x="15.5" y="15" width="9" height="15" fill="#0b2c5f"/><rect x="10" y="30" width="20" height="3.5" rx="1" fill="#0b2c5f"/><path d="M18.4 22.5a1.6 1.6 0 013.2 0V26h-3.2z" fill="#f5c445"/><rect x="19.2" y="2.5" width="1.6" height="4" fill="#0b2c5f"/></svg><span><b>UPR</b><small>Universidad de<br>Puerto Rico</small></span></a>
+      <nav><a href="#/investigadores">Investigadores</a><a href="#/capacidades">Capacidades</a><a href="#/proyectos">Proyectos</a><a href="#/oportunidades">Oportunidades</a><a href="#/analitica">Analítica</a></nav>
+      <div class="l-actions"><a class="btn ghost" href="#/acceso">Acceder</a><button class="btn gold" id="reqAccess" type="button">Solicitar acceso</button></div>
+    </header>
+    <section class="hero">
+      <div class="hero-text">
+        <h1>UPR Research<br>Capacity Map</h1>
+        <p>Quién sabe qué, quién trabaja en qué, qué capacidades tenemos, dónde están y quién podría colaborar.</p>
+        <form class="hero-search" id="heroSearch"><span data-icon="search"></span><input type="search" id="heroQ" placeholder="Buscar investigador, tema, capacidad, equipo o recinto…" aria-label="Buscar"><button type="submit" aria-label="Buscar"><span data-icon="arrow"></span></button></form>
+      </div>
+      <div class="hero-art"><svg viewBox="0 0 320 430" aria-hidden="true">
+  <g stroke="#c4ae86" stroke-width="1.5">
+    <rect x="18" y="300" width="284" height="130" fill="#f3e7cf"/>
+    <rect x="10" y="288" width="300" height="16" fill="#c65a3e"/>
+    <g fill="#9fb8dc"><rect x="30" y="320" width="18" height="28" rx="9"/><rect x="30" y="364" width="18" height="28" rx="9"/><rect x="64" y="320" width="18" height="28" rx="9"/><rect x="64" y="364" width="18" height="28" rx="9"/><rect x="98" y="320" width="18" height="28" rx="9"/><rect x="98" y="364" width="18" height="28" rx="9"/><rect x="200" y="320" width="18" height="28" rx="9"/><rect x="200" y="364" width="18" height="28" rx="9"/><rect x="234" y="320" width="18" height="28" rx="9"/><rect x="234" y="364" width="18" height="28" rx="9"/><rect x="268" y="320" width="18" height="28" rx="9"/><rect x="268" y="364" width="18" height="28" rx="9"/></g>
+    <rect x="124" y="120" width="72" height="190" fill="#f6ecd8"/>
+    <rect x="114" y="108" width="92" height="16" fill="#efe2c6"/>
+    <rect x="132" y="56" width="56" height="54" fill="#f6ecd8"/>
+    <path d="M132 56 Q160 6 188 56Z" fill="#efe2c6"/>
+    <rect x="155" y="0" width="10" height="26" fill="#efe2c6"/>
+    <g fill="#9fb8dc"><path d="M146 104v-28a14 14 0 0128 0v28z"/><rect x="140" y="140" width="14" height="30" rx="7"/><rect x="166" y="140" width="14" height="30" rx="7"/><rect x="140" y="196" width="14" height="30" rx="7"/><rect x="166" y="196" width="14" height="30" rx="7"/><rect x="146" y="250" width="28" height="40" rx="14"/></g>
+  </g>
+</svg></div>
+      <svg class="hero-wave" viewBox="0 0 1200 120" preserveAspectRatio="none" aria-hidden="true"><path d="M0 70 C300 20 520 120 820 60 S1100 40 1200 70 V120 H0Z" fill="#2a78d6" opacity=".10"/><path d="M0 95 C260 60 560 125 880 85 S1120 70 1200 90 V120 H0Z" fill="#f5c445" opacity=".22"/></svg>
+    </section>
+    <div class="cta-row">
+      <a class="cta" href="#/capacidades"><span data-icon="layers"></span>Explorar Capacidades</a>
+      <a class="cta" href="#/colaboraciones"><span data-icon="users"></span>Encontrar Colaboradores</a>
+      <a class="cta" href="#/oportunidades"><span data-icon="target"></span>Identificar Oportunidades</a>
+    </div>
+  </div>
+  <p class="l-foot">Fuentes: ORCID · OpenAlex · NIH RePORTER · NSF Awards. Las capacidades y áreas de oportunidad son inferencias a partir de la evidencia.</p>
+</div>
+
+<!-- ===================== ACCESO ===================== -->
+<div id="gate" class="gate" hidden>
+  <div class="gate-card">
+    <a class="brand" href="#/"><svg viewBox="0 0 40 40" aria-hidden="true"><rect x="1" y="1" width="38" height="38" rx="10" fill="#f5c445"/><path d="M20 6l4.5 5.5V15h-9v-3.5z" fill="#0b2c5f"/><rect x="15.5" y="15" width="9" height="15" fill="#0b2c5f"/><rect x="10" y="30" width="20" height="3.5" rx="1" fill="#0b2c5f"/><path d="M18.4 22.5a1.6 1.6 0 013.2 0V26h-3.2z" fill="#f5c445"/><rect x="19.2" y="2.5" width="1.6" height="4" fill="#0b2c5f"/></svg><span><b>UPR</b><small>Research Capacity Map</small></span></a>
+    <div id="gateViewer">
+      <h2>Acceso a la plataforma</h2>
+      <p class="note">Escribe la contraseña de acceso para consultar los datos.</p>
+      <form id="viewerForm"><label>Contraseña de acceso<input type="password" id="viewerPw" autocomplete="current-password" required></label>
+        <button class="btn gold" type="submit">Entrar</button></form>
+    </div>
+    <div id="gateAdmin" hidden>
+      <h2>Administración</h2>
+      <p class="note">Acceso para ejecutar el harvest y actualizar los datos.</p>
+      <form id="adminForm"><label>Usuario<input type="text" id="admUser" autocomplete="username" required></label>
+        <label>Contraseña<input type="password" id="admPass" autocomplete="current-password" required></label>
+        <button class="btn gold" type="submit">Entrar como administrador</button></form>
+    </div>
+    <p class="gate-err" id="gateErr"></p>
+    <div class="mode-banner" id="modeBanner" hidden>Modo local de prueba: la contraseña todavía no se verifica. La verificación real se activará al conectar Supabase.</div>
+    <p class="note" style="margin-top:14px"><a href="#/">← Volver a la portada</a></p>
+  </div>
+</div>
+
+<!-- ===================== APLICACIÓN ===================== -->
+<div id="loadingBox" class="loading-box" hidden>Cargando datos…</div>
+<div id="app" class="app" hidden>
+  <aside class="side">
+    <a class="brand" href="#/inicio"><svg viewBox="0 0 40 40" aria-hidden="true"><rect x="1" y="1" width="38" height="38" rx="10" fill="#f5c445"/><path d="M20 6l4.5 5.5V15h-9v-3.5z" fill="#0b2c5f"/><rect x="15.5" y="15" width="9" height="15" fill="#0b2c5f"/><rect x="10" y="30" width="20" height="3.5" rx="1" fill="#0b2c5f"/><path d="M18.4 22.5a1.6 1.6 0 013.2 0V26h-3.2z" fill="#f5c445"/><rect x="19.2" y="2.5" width="1.6" height="4" fill="#0b2c5f"/></svg><span><b>UPR</b><small>Research Capacity Map</small></span></a>
+    <nav id="sideNav">
+      <a class="nav" href="#/inicio" data-r="inicio"><span data-icon="home"></span>Inicio</a>
+      <a class="nav" href="#/investigadores" data-r="investigadores"><span data-icon="user"></span>Investigadores</a>
+      <a class="nav" href="#/capacidades" data-r="capacidades"><span data-icon="layers"></span>Capacidades</a>
+      <a class="nav" href="#/proyectos" data-r="proyectos"><span data-icon="flask"></span>Proyectos</a>
+      <a class="nav" href="#/colaboraciones" data-r="colaboraciones"><span data-icon="users"></span>Colaboraciones</a>
+      <a class="nav" href="#/oportunidades" data-r="oportunidades"><span data-icon="target"></span>Oportunidades</a>
+      <a class="nav" href="#/analitica" data-r="analitica"><span data-icon="bars"></span>Analítica</a>
+      <a class="nav" href="#/recintos" data-r="recintos"><span data-icon="building"></span>Recintos</a>
+    </nav>
+    <div class="side-foot">
+      <a class="nav" href="#/admin" data-r="admin"><span data-icon="shield"></span>Administración</a>
+      <p id="dataStamp" style="padding:0 12px"></p>
+    </div>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <button class="burger" id="burger" aria-label="Menú"><span data-icon="menu"></span></button>
+      <form class="t-search" id="topSearch"><span data-icon="search"></span><input type="search" id="topQ" placeholder="Buscar en toda la plataforma…" aria-label="Buscar"></form>
+      <div class="user-chip"><div class="avatar" id="userAv">V</div><div class="who"><b id="userName">Visitante</b><small id="userRole">Acceso de consulta</small></div>
+        <button class="btn ghost" id="logout" title="Salir"><span data-icon="logout"></span></button></div>
+    </header>
+    <main id="views">
+      <section class="view" data-view="inicio"></section>
+      <section class="view" data-view="investigadores"></section>
+      <section class="view" data-view="investigador"></section>
+      <section class="view" data-view="capacidades">
+        <div class="view-head"><div><div class="crumbs">Capacidades › Mapa</div><h1>Mapa de Capacidades UPR</h1><p>Distribución de capacidades de investigación por recinto y área.</p></div></div>
+        <div class="card">
+    <div class="row">
+      <select id="mapMetric"></select>
+      <select id="mapCat"></select>
+      <input type="search" id="mapFilter" placeholder="Filtrar capacidad: GIS, cancer, climate…" style="flex:1;min-width:200px">
+      <label class="note"><input type="checkbox" id="mapLinks" checked> Colaboraciones entre recintos</label>
+    </div>
+    <div class="mapgrid">
+      <div><div id="cmap"></div><p class="note" id="mapNote"></p></div>
+      <div id="campusPanel"><p class="note">Selecciona un recinto en el mapa.</p></div>
+    </div>
+    <h3>Capacidades × recintos</h3>
+    <div id="heatmap"><p class="note">Enriquece con OpenAlex o busca financiamiento para ver la matriz.</p></div>
+    <div id="heatList"></div>
+        </div>
+      </section>
+      <section class="view" data-view="proyectos"></section>
+      <section class="view" data-view="colaboraciones">
+        <div class="view-head"><div><div class="crumbs">Colaboraciones</div><h1>Encontrar Colaboradores</h1><p>Pregunta por capacidades y arma equipos interdisciplinarios entre recintos.</p></div></div>
+        <div class="card">
+    <p class="note" style="margin-top:0">Pregunta por capacidades en español o inglés. Busca en las capacidades inferidas de los profesores enriquecidos.</p>
+    <div class="row">
+      <input type="search" id="q" style="flex:1;min-width:240px" placeholder="¿Quién utiliza GIS?">
+      <button class="primary" id="qBtn">Buscar</button>
+    </div>
+    <div class="examples" id="examples"></div>
+    <div id="qOut"></div>
+    <h3>Capacidades agregadas</h3>
+        </div>
+        <div id="collabExtra"></div>
+      </section>
+      <section class="view" data-view="oportunidades"></section>
+      <section class="view" data-view="analitica">
+        <div id="analyticsTop"></div>
+        <div class="card"><h2>Capacidades agregadas</h2>
+    <div class="row">
+      <select id="aggDim"></select>
+      <select id="aggCat"><option value="">Todas las categorías</option></select>
+      <label class="note">Confianza mínima <input type="number" id="aggMin" value="0.4" min="0" max="1" step="0.05" style="width:70px"></label>
+    </div>
+    <div id="aggOut" style="margin-top:10px"></div>
+        </div>
+        <div class="card"><h2>Exportar</h2>
+    <div class="row">
+      <button id="dlCsv" disabled>CSV de profesores</button>
+      <button id="dlCap" disabled>CSV de capacidades (evidencia)</button>
+      <button id="dlJson" disabled>JSON del Capacity Map</button>
+    </div>
+    <div id="campusButtons" class="row" style="margin-top:8px"></div>
+          <p class="note">El CSV de profesores separa las columnas por fuente: ORCID, OpenAlex, NIH/NSF e inferidas. El CSV de capacidades tiene una fila por profesor y capacidad, con su evidencia. El JSON guarda todo el estado.</p>
+        </div>
+      </section>
+      <section class="view" data-view="recintos"></section>
+      <section class="view" data-view="buscar"></section>
+      <section class="view" data-view="admin">
+        <div class="view-head"><div><div class="crumbs">Administración</div><h1>Administración y harvest</h1><p>Actualiza los datos desde ORCID, OpenAlex, NIH y NSF. Todo se guarda automáticamente al terminar cada paso.</p></div></div>
+        <div class="admin-grid">
+          <div class="card"><h2>Datos y publicación</h2><div class="admin-status" id="adminStatus"></div>
+            <p class="note" id="pubStatus" style="margin:10px 0 0"></p>
+            <div class="notice" id="lightNote" hidden style="margin-top:10px">Estás viendo la <b>versión publicada</b> (de consulta). Para actualizar los datos, ejecuta el paso 1 (ORCID): se crea una versión de trabajo nueva, y al terminar cada paso se publica automáticamente.</div>
+            <div class="row" style="margin-top:10px"><button id="saveNow" class="primary">Publicar ahora</button><button id="impBtn" type="button">Importar JSON…</button><input type="file" id="impFile" accept=".json,application/json" hidden><button id="clearData">Borrar copia de trabajo local</button></div></div>
+          <section class="card">
+    <h2>1. Identificar profesores en ORCID <span class="src orcid">ORCID</span></h2>
+    <div class="row"><select id="campus"></select></div>
+    <label class="opt"><input type="checkbox" id="verify" checked>
+      <span>Verificar empleo en la UPR (recomendado)
+        <small>Revisa el empleo declarado de cada perfil para confirmar recinto, cargo y departamento (1 consulta por perfil).</small></span></label>
+    <div style="margin-left:26px">
+      <label class="opt"><input type="checkbox" id="onlyFaculty" checked>
+        <span>Solo cargos docentes <small>El cargo tiene que coincidir con esta expresión regular:</small></span></label>
+      <input type="text" class="mono" id="roleRegex" value="profes|prof\.|catedr|instructor|lecturer|conferenciante|faculty|docente|teacher|maestr">
+      <label class="opt"><input type="checkbox" id="includeNoRole"><span>Incluir empleos UPR sin cargo especificado</span></label>
+      <label class="opt"><input type="checkbox" id="onlyCurrent" checked><span>Solo empleos actuales (sin fecha de terminación)</span></label>
+    </div>
+    <label class="opt"><input type="checkbox" id="broad">
+      <span>Búsqueda amplia (solo para un recinto)
+        <small>Incluye perfiles con "University of Puerto Rico" sin recinto en el nombre y los clasifica por ciudad. Más lento.</small></span></label>
+    <div class="row" style="margin-top:10px">
+      <button class="primary" id="start">Buscar en ORCID</button>
+      <button id="stop" disabled>Detener</button>
+    </div>
+    <div class="progress"><div id="bar"></div></div>
+    <div class="stats">
+      <div><b id="sFound">0</b><span>perfiles encontrados</span></div>
+      <div><b id="sChecked">0</b><span>verificados</span></div>
+      <div><b id="sKept">0</b><span>profesores</span></div>
+    </div>
+    <pre class="log" id="log"></pre>
+          </section>
+          <section class="card">
+    <h2>2. Enriquecer con OpenAlex <span class="src oa">OpenAlex</span></h2>
+    <p class="note" style="margin-top:0">Busca a cada profesor en OpenAlex <b>solo por su ORCID</b>. Trae sus métricas, topics y publicaciones, y genera su perfil de capacidades. Si OpenAlex no tiene el ORCID, se muestran posibles coincidencias por nombre para revisión, pero nunca se usan automáticamente.</p>
+    <div class="fields">
+      <label>API key de OpenAlex (gratuita · <a href="https://openalex.org/settings/api" target="_blank" rel="noopener">obtenerla aquí</a>)<input type="password" id="oaKey" placeholder="pega aquí tu key" autocomplete="off"></label>
+      <label>Máximo de publicaciones por profesor<input type="number" id="oaMax" value="500" min="25" max="5000" step="25"></label>
+    </div>
+    <p class="note" id="oaKeyNote">Desde febrero de 2026 OpenAlex pide una <b>API key gratuita</b>. Sin key, el presupuesto es de unos US$0.10 al día por usuario, que se agota con pocos cientos de profesores. Con key es de US$1 al día, unas 10,000 consultas. Buscar un autor por ORCID es gratis; cada página de publicaciones consume presupuesto.</p>
+    <label class="opt"><input type="checkbox" id="oaRemember" checked><span>Recordar la key en este navegador</span></label>
+    <label class="opt"><input type="checkbox" id="oaNames">
+      <span>Buscar candidatos por nombre cuando OpenAlex no tenga el ORCID
+        <small>Solo para revisión manual; nunca se usan. Es la consulta más costosa (unas 10 veces más que las demás).</small></span></label>
+    <label class="opt"><input type="checkbox" id="persistCache" checked>
+      <span>Guardar caché en este navegador (localStorage, 7 días)
+        <small>Evita repetir consultas a OpenAlex si recargas la página o vuelves a enriquecer.</small></span></label>
+    <div class="row">
+      <button class="primary" id="oaBtn" disabled>Enriquecer con OpenAlex</button>
+      <button id="oaStop" disabled>Detener</button>
+      <button id="oaClear">Vaciar caché</button>
+      <span class="note" id="cacheInfo"></span>
+    </div>
+    <div class="progress"><div id="oabar"></div></div>
+    <div class="stats">
+      <div><b id="oDone">0</b><span>procesados</span></div>
+      <div><b id="oMatched">0</b><span>vinculados por ORCID</span></div>
+      <div><b id="oMissing">0</b><span>sin perfil OpenAlex</span></div>
+      <div><b id="oDisc">0</b><span>con discrepancias</span></div>
+      <div><b id="oCache">0</b><span>respuestas desde caché</span></div>
+      <div><b id="oRetry">0</b><span>reintentos</span></div>
+    </div>
+    <pre class="log" id="oalog"></pre>
+          </section>
+          <section class="card">
+    <h2>3. Financiamiento: NIH RePORTER y NSF Awards <span class="src fund">NIH · NSF</span></h2>
+    <p class="note" style="margin-top:0">Descarga una sola vez todos los proyectos NIH y NSF de Puerto Rico desde el año indicado. Se queda solo con los de la UPR y los vincula con los profesores por <b>nombre + institución UPR + recinto</b>, porque estas fuentes no usan ORCID. Si un mismo investigador del proyecto coincide con más de un profesor, se marca como ambiguo y no se asigna a ninguno.</p>
+    <div class="fields">
+      <label>Desde el año<input type="number" id="fundSince" min="1985" step="1"></label>
+    </div>
+    <label class="opt"><input type="checkbox" id="fundNih" checked><span>NIH RePORTER</span></label>
+    <label class="opt"><input type="checkbox" id="fundNsf" checked><span>NSF Awards</span></label>
+    <label class="opt"><input type="checkbox" id="fundMedium">
+      <span>Contar también coincidencias de confianza media
+        <small>Por ejemplo, la misma persona en otro recinto o solo con la inicial del nombre. Siempre se muestran en la ficha marcadas como "verificar".</small></span></label>
+    <div class="row">
+      <button class="primary" id="fundBtn" disabled>Buscar financiamiento</button>
+      <button id="fundStop" disabled>Detener</button>
+      <span class="note" id="fundMode"></span>
+    </div>
+    <div class="progress"><div id="fbar"></div></div>
+    <div class="stats">
+      <div><b id="fNih">0</b><span>proyectos NIH (UPR)</span></div>
+      <div><b id="fNsf">0</b><span>proyectos NSF (UPR)</span></div>
+      <div><b id="fPeople">0</b><span>profesores con fondos</span></div>
+      <div><b id="fMatched">0</b><span>vínculos de confianza alta</span></div>
+      <div><b id="fMedium">0</b><span>de confianza media</span></div>
+      <div><b id="fAmb">0</b><span>ambiguos (no asignados)</span></div>
+    </div>
+    <pre class="log" id="flog"></pre>
+          </section>
+          <section class="card">
+    <h2>5. Paquete para VIVO</h2>
+    <p class="note" style="margin-top:0">Baja el registro ORCID completo de cada profesor y genera un <b>.zip</b> con <code>vivo.ttl</code> (VIVO-ISF), CSV relacionales y datos originales. Si ya enriqueciste con OpenAlex, también incluye las áreas de investigación (<code>vivo:hasResearchArea</code> → topics de OpenAlex como <code>skos:Concept</code>) y el enlace al perfil de OpenAlex.</p>
+    <div class="fields">
+      <label>Namespace de tu VIVO<input type="text" class="mono" id="ns" value="http://vivo.upr.edu/individual/"></label>
+    </div>
+    <label class="opt"><input type="checkbox" id="fullWorks" checked>
+      <span>Detalle completo de publicaciones de ORCID <small>Coautores, resumen, ISSN, volumen y páginas.</small></span></label>
+    <div class="row">
+      <button class="primary" id="vivoBtn" disabled>Generar paquete VIVO</button>
+      <button id="vivoStop" disabled>Detener</button>
+    </div>
+    <div class="progress"><div id="vbar"></div></div>
+    <div class="stats">
+      <div><b id="vPeople">0</b><span>perfiles</span></div>
+      <div><b id="vPos">0</b><span>posiciones</span></div>
+      <div><b id="vPubs">0</b><span>publicaciones</span></div>
+      <div><b id="vGrants">0</b><span>fondos</span></div>
+      <div><b id="vTriples">0</b><span>triples RDF</span></div>
+    </div>
+    <pre class="log" id="vlog"></pre>
+          </section>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script src="js/core.js"></script>
+<script src="js/sources/orcid.js"></script>
+<script src="js/sources/openalex.js"></script>
+<script src="js/sources/funding.js"></script>
+<script src="js/sources/grants.js"></script>
+<script src="js/sources/registry.js"></script>
+<script src="js/capacity/lexicons.js"></script>
+<script src="js/capacity/funding.js"></script>
+<script src="js/capacity/engine.js"></script>
+<script src="js/aggregate.js"></script>
+<script src="js/export/csv.js"></script>
+<script src="js/export/vivo.js"></script>
+<script src="js/store.js"></script>
+<script src="js/charts.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/map.js"></script>
+<script src="js/views.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
