@@ -257,7 +257,7 @@ function viewProyectos(el){
   const units = uniq(S.awards.map(a => `${a.agency} ${a.unit}`.trim())).sort();
   const opt = (v, cur, l=v) => `<option value="${esc(v)}" ${v === cur ? "selected" : ""}>${esc(l)}</option>`;
   el.innerHTML = head(`${icon("flask")} Proyectos`, "Proyectos de Investigación", `Proyectos NIH y NSF vinculados a profesores de la UPR ${SRC.fund}`)
-    + (!S.awards.length ? `<div class="empty"><b>Aún no hay proyectos vinculados.</b>${AUTH.isAdmin() ? `Ejecuta "Buscar financiamiento" en <a href="#/admin">Administración</a>.` : "Un administrador debe ejecutar la búsqueda de financiamiento."}</div>` : `
+    + (!S.awards.length ? `<div class="empty"><b>Aún no hay proyectos vinculados.</b>${AUTH.isAdmin() ? `Ejecuta "Buscar financiamiento" en <a href="#/admin">Administración</a>.` : "Un administrador debe ejecutar la búsqueda de financiamiento."}</div>` : `${coverageNote(S)}
     <div class="filters"><input type="search" id="prjQ" placeholder="Buscar por título o investigador…" value="${esc(PRJ.q)}">
       <select id="prjStatus"><option value="">Estado</option>${opt("on", PRJ.status, "Vigente")}${opt("off", PRJ.status, "Finalizado")}</select>
       <select id="prjCampus"><option value="">Recinto</option>${[...S.campuses].sort().map(c => opt(c, PRJ.campus)).join("")}</select>
@@ -407,6 +407,7 @@ function viewAnalitica(){
       <div class="kpi">${icon("book")}<b>${fmt(S.uniqueWorks)}</b><span>Publicaciones únicas analizadas</span></div>
       <div class="kpi">${icon("cite")}<b>${fmt(cites)}</b><span>Citas (OpenAlex)</span></div>
       <div class="kpi">${icon("pulse")}<b>${S.list.length ? Math.round(100*active/S.list.length) : 0}%</b><span>Investigadores activos</span></div></div>
+    ${coverageNote(S)}
     <div class="grid2"><div class="card"><h2>Fondos por instituto / programa ${SRC.fund}</h2><div id="anUnits"></div></div>
       <div class="card"><h2>Fondos por recinto</h2><div id="anCampus"></div></div></div>
     <div class="grid2 even" style="margin:16px 0"><div class="card"><h2>Publicaciones por recinto</h2><div id="anPubs"></div></div>

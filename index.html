@@ -165,7 +165,7 @@
           <div class="card"><h2>Datos y publicación</h2><div class="admin-status" id="adminStatus"></div>
             <p class="note" id="pubStatus" style="margin:10px 0 0"></p>
             <div class="notice" id="lightNote" hidden style="margin-top:10px">Estás viendo la <b>versión publicada</b> (de consulta). Para actualizar los datos, ejecuta el paso 1 (ORCID): se crea una versión de trabajo nueva, y al terminar cada paso se publica automáticamente.</div>
-            <div class="row" style="margin-top:10px"><button id="saveNow" class="primary">Publicar ahora</button><button id="impBtn" type="button">Importar JSON…</button><input type="file" id="impFile" accept=".json,application/json" hidden><button id="clearData">Borrar copia de trabajo local</button></div></div>
+            <div class="row" style="margin-top:10px"><button id="saveNow" class="primary">Publicar ahora</button><button id="backupBtn" type="button">Descargar respaldo completo</button><button id="impBtn" type="button" title="Restaura un respaldo o importa un JSON del Capacity Map">Restaurar / importar JSON…</button><input type="file" id="impFile" accept=".json,application/json" hidden><button id="clearData">Borrar copia de trabajo local</button></div></div>
           <section class="card">
     <h2>1. Identificar profesores en ORCID <span class="src orcid">ORCID</span></h2>
     <div class="row"><select id="campus"></select></div>
@@ -193,6 +193,11 @@
       <div><b id="sKept">0</b><span>profesores</span></div>
     </div>
     <pre class="log" id="log"></pre>
+    <details class="diag" style="margin-top:12px"><summary><b>¿Falta alguien? Diagnosticar o añadir por ORCID iD</b></summary>
+      <p class="note">Escribe el ORCID iD (o el enlace orcid.org). Se revisan sus empleos declarados y se explica qué filtro lo deja fuera; luego puedes añadirlo manualmente.</p>
+      <div class="row"><input type="text" class="mono" id="diagId" placeholder="0000-0003-4787-2239" style="flex:1;min-width:220px"><button id="diagBtn" type="button">Diagnosticar</button></div>
+      <div id="diagOut"></div>
+    </details>
           </section>
           <section class="card">
     <h2>2. Enriquecer con OpenAlex <span class="src oa">OpenAlex</span></h2>

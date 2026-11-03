@@ -76,7 +76,11 @@ $("start").onclick = async () => {
   searchAbort = new AbortController(); const signal = searchAbort.signal;
   // Solo se reemplaza el alcance de este harvest; los demás recintos publicados se conservan.
   const scope = target ? target.name : "Sistema UPR";
-  for (const R of researchers()) if (!R.light || inScope(R, scope)) STATE.researchers.delete(R.orcid);
+  // Los añadidos manualmente de este alcance se conservan (si solo está la versión de consulta, se baja la completa).
+  for (const R of researchers()){
+    if (R.manual && inScope(R, scope)){ if (R.light){ try { await STORE.fullRecord(R.orcid); } catch {} } continue; }
+    if (!R.light || inScope(R, scope)) STATE.researchers.delete(R.orcid);
+  }
   STATE.scope = scope; if (!target) STATE.label = scope; STATE.createdAt = nowISO();
   $("log").textContent = ""; $("bar").style.width = "0";
   ["sFound","sChecked","sKept"].forEach(k => $(k).textContent = "0");
@@ -206,6 +210,7 @@ $("fundBtn").onclick = async () => {
       try {
         const awards = await mod.harvest(FUND_CFG.since, signal, (n, label) => { $("fbar").style.width = Math.round(100*(i + 0.5)/svcs.length) + "%"; $("fundMode").textContent = `${label}: ${n} registros`; });
         $(statId).textContent = awards.length;
+        STATE.fundingTotals = { ...(STATE.fundingTotals || {}), [k]: fundingTotals(awards, FUND_CFG.since) };
         const r = matchAwards(k, awards, list);
         log("flog", `  ${awards.length} proyectos de la UPR · ${r.matched} vínculos únicos · ${r.ambiguous} ambiguos`);
       } catch(e){
@@ -270,7 +275,10 @@ $("dlJson").onclick = () => downloadCapacityJSON(researchers(), STATE.label);
 $("impBtn").onclick = () => $("impFile").click();
 $("impFile").onchange = async e => {
   const f = e.target.files[0]; if (!f) return;
-  try { const n = importCapacityJSON(JSON.parse(await f.text())); log("log", `Importados ${n} profesores desde ${f.name}.`); await persistAndRefresh(); }
+  try {
+    const obj = JSON.parse(await f.text());
+    if (APP_CONFIG.backend !== "local" && !confirm(`Se cargarán ${obj.researchers?.length ?? 0} investigadores desde «${f.name}»${obj.label ? ` (${obj.label})` : ""} y se publicarán como la versión vigente${CAMPUSES.some(c => c.name === obj.label) ? ` del recinto ${obj.label}` : ", reemplazando la versión publicada completa"}.\n\n¿Continuar?`)){ e.target.value = ""; return; }
+    const n = importCapacityJSON(obj); log("log", `Importados ${n} profesores desde ${f.name}.`); await persistAndRefresh(); }
   catch(err){ alert("No se pudo importar: " + err.message); }
   e.target.value = "";
 };
@@ -291,3 +299,73 @@ $("clearData").onclick = async () => {
   updateButtons(); refreshCacheInfo(); campusButtons();
   route();
 })();
+
+/* ---------- Respaldo completo ---------- */
+$("backupBtn").onclick = async () => {
+  if (APP_CONFIG.backend === "local"){ downloadCapacityJSON(researchers(), STATE.label); return; }
+  const b = $("backupBtn"); b.disabled = true;
+  try {
+    const data = await STORE.backup((n, t) => setPub(`Preparando respaldo: ${n} de ${t} investigadores…`));
+    saveBlob(new Blob([JSON.stringify(data)], { type: "application/json" }), `upr_respaldo_${slug(data.label || "upr")}_${new Date().toISOString().slice(0,10)}.json`);
+    setPub(`✓ Respaldo descargado: ${data.researchers.length} investigadores (${data.label}). Para restaurarlo usa «Restaurar / importar JSON…».`);
+  } catch(e){ setPub(`✗ No se pudo generar el respaldo: ${e.message}`); if (e instanceof AuthError) alert(e.message); }
+  finally { b.disabled = false; }
+};
+
+/* ---------- Diagnóstico y adición manual por ORCID iD ---------- */
+let DIAG = null;
+$("diagBtn").onclick = async () => {
+  const out = $("diagOut"), id = ($("diagId").value.match(/\d{4}-\d{4}-\d{4}-\d{3}[\dXx]/) || [])[0]?.toUpperCase();
+  if (!id){ out.innerHTML = `<p class="note" style="color:#c0352f">Escribe un ORCID iD válido (por ejemplo 0000-0003-4787-2239).</p>`; return; }
+  out.innerHTML = `<p class="note">Consultando ORCID…</p>`;
+  try {
+    const [srch, emps] = await Promise.all([getJSON(`${API}/expanded-search/?q=${encodeURIComponent("orcid:" + id)}`), ORCID.employments(id)]);
+    let p = srch?.["expanded-result"]?.[0];
+    if (!p){ const rec = await ORCID.record(id); const n = rec?.person?.name || {};
+      p = { "orcid-id": id, "given-names": n["given-names"]?.value || "", "family-names": n["family-names"]?.value || "", "institution-name": [] }; }
+    let roleRe = null; try { roleRe = new RegExp($("roleRegex").value, "i"); } catch {}
+    const onlyFac = $("onlyFaculty").checked, includeNoRole = $("includeNoRole").checked, onlyCurrent = $("onlyCurrent").checked;
+    const rows = emps.map(e => { const upr = isUPR(e.org); return { ...e, upr, campus: upr ? detectCampus(e.org, e.city).name : "",
+      roleOK: !onlyFac || (e.role ? !!roleRe?.test(e.role) : includeNoRole), currentOK: !onlyCurrent || !e.end }; });
+    const upr = rows.filter(r => r.upr), passing = upr.filter(r => r.roleOK && r.currentOK);
+    const reasons = [];
+    if (!emps.length) reasons.push("No tiene empleos <b>públicos</b> en ORCID (no declaró empleos o los tiene como privados). La plataforma solo puede usar lo que es público.");
+    else if (!upr.length) reasons.push(`Ninguno de sus empleos públicos es de la UPR: ${rows.map(r => esc(r.org)).join("; ")}.`);
+    for (const r of upr){
+      if (onlyCurrent && r.end) reasons.push(`Su empleo en <b>${esc(r.org)}</b> tiene fecha de terminación (${esc(r.end)}) y está marcado «Solo empleos actuales».`);
+      if (onlyFac && !r.role && !includeNoRole) reasons.push(`Su empleo en <b>${esc(r.org)}</b> no indica cargo y «Incluir empleos UPR sin cargo» está desmarcado.`);
+      if (onlyFac && r.role && !r.roleOK) reasons.push(`Su cargo «${esc(r.role)}» no coincide con la expresión de cargos docentes.`);
+      if (r.campus === GENERAL.name) reasons.push(`La organización es «${esc(r.org)}» sin recinto${r.city ? ` (ciudad: ${esc(r.city)})` : ""}: queda como «${GENERAL.name}» y la búsqueda por recinto no lo incluye. Usa «Todo el sistema UPR» o la búsqueda amplia.`);
+    }
+    const inst = p["institution-name"] || [];
+    if (upr.length && !inst.some(isUPR)) reasons.push("El índice de búsqueda de ORCID no lo asocia a la UPR, así que la búsqueda por afiliación no lo devuelve aunque su empleo sea de la UPR.");
+    const already = STATE.researchers.get(id);
+    const camp = uniq(passing.map(r => r.campus))[0] || uniq(upr.map(r => r.campus))[0] || GENERAL.name;
+    DIAG = { p, id, emps: (passing.length ? passing : upr) };
+    out.innerHTML = `<div class="card" style="box-shadow:none;margin-top:10px">
+      <h3 style="margin-top:0">${esc(`${p["given-names"] || ""} ${p["family-names"] || ""}`.trim() || id)} <a class="note" href="https://orcid.org/${id}" target="_blank" rel="noopener">${id}</a></h3>
+      ${already ? `<p class="note">✓ Ya está en la plataforma (${esc(already.affiliation.campus)}).</p>` : ""}
+      <table class="mini"><thead><tr><th>Organización</th><th>Cargo</th><th>Fechas</th><th>UPR / recinto</th><th>Pasa filtros</th></tr></thead><tbody>
+      ${rows.map(r => `<tr><td>${esc(r.org)}${r.dept ? `<br><small>${esc(r.dept)}</small>` : ""}</td><td>${esc(r.role || "—")}</td><td>${esc(r.start || "?")} – ${esc(r.end || "actual")}</td>
+        <td>${r.upr ? esc(r.campus) : "no"}</td><td>${r.upr && r.roleOK && r.currentOK ? "✓" : "✗"}</td></tr>`).join("") || `<tr><td colspan="5" class="note">Sin empleos públicos</td></tr>`}</tbody></table>
+      <p class="note"><b>Índice de búsqueda de ORCID:</b> ${inst.length ? inst.map(esc).join("; ") : "sin instituciones"}</p>
+      ${reasons.length ? `<div class="notice"><b>Por qué no aparece:</b><ul>${uniq(reasons).map(r => `<li>${r}</li>`).join("")}</ul></div>` : (already ? "" : `<p class="note">Pasa todos los filtros; debería aparecer al cosechar su recinto (${esc(camp)}).</p>`)}
+      ${AUTH.isAdmin() || APP_CONFIG.backend === "local" ? `<div class="row" style="margin-top:10px"><label class="note">Recinto: <select id="diagCampus">${[...CAMPUSES, GENERAL].map(c => `<option ${c.name === (already?.affiliation.campus || camp) ? "selected" : ""}>${esc(c.name)}</option>`).join("")}</select></label>
+        <button class="primary" id="diagAdd" type="button">${already ? "Actualizar en la plataforma" : "Añadir a la plataforma"}</button></div>
+        <p class="note">Se publica de inmediato y se conserva en futuras cosechas de su recinto. Después ejecuta los pasos 2 y 3 para completar su perfil.</p>` : ""}
+    </div>`;
+    const add = $("diagAdd"); if (add) add.onclick = addManual;
+  } catch(e){ out.innerHTML = `<p class="note" style="color:#c0352f">No se pudo consultar ORCID: ${esc(e.message)}</p>`; }
+};
+async function addManual(){
+  if (!DIAG) return;
+  const campus = $("diagCampus").value, { p, id } = DIAG;
+  const emps = DIAG.emps.map(e => ({ ...e, campus }));
+  const R = makeResearcher(p, campus, emps.length ? emps : null, emps.length ? null : ["University of Puerto Rico"]);
+  R.manual = { added: nowISO(), by: "admin" };
+  if (!working().length) STATE.scope = "Adición manual";
+  STATE.researchers.set(id, R);
+  $("diagOut").insertAdjacentHTML("beforeend", `<p class="note">Añadiendo y publicando…</p>`);
+  await persistAndRefresh();
+  $("diagOut").insertAdjacentHTML("beforeend", `<p class="note">✓ ${esc(fullName(R))} quedó en la plataforma (${esc(campus)}). Ejecuta el paso 2 (OpenAlex) y el 3 (financiamiento) para completar su perfil.</p>`);
+}

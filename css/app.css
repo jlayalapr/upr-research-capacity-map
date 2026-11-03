@@ -235,3 +235,11 @@ body{font-family:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
 .deadline{text-align:right;font-size:.82rem;color:var(--muted);white-space:nowrap}
 .deadline b{display:block;color:var(--ink);font-size:.95rem}
 .deadline.soon b{color:#c0352f}
+/* diagnóstico ORCID y cobertura de fondos */
+details.diag > summary { cursor: pointer; padding: 6px 0; }
+table.mini { width: 100%; border-collapse: collapse; font-size: 13px; margin: 8px 0; }
+table.mini th, table.mini td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line, #e3e7ee); vertical-align: top; }
+table.mini th { font-weight: 600; font-size: 12px; opacity: .8; }
+.notice.coverage { margin: 0 0 16px; display: grid; gap: 6px; }
+.notice.coverage small { opacity: .8; }
+.notice ul { margin: 6px 0 0; padding-left: 20px; }

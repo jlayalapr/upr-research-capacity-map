@@ -192,3 +192,37 @@ function acceptedAwards(R, includeMedium = FUND_CFG.includeMedium){
   return ["nih","nsf"].flatMap(s => R.sources[s]?.awards || [])
     .filter(a => a.match.level === "high" || (includeMedium && a.match.level === "medium"));
 }
+
+/* ------------------------------ Cobertura ------------------------------ */
+/** Totales de TODOS los proyectos de la UPR descargados (denominador de la cobertura), por recinto. */
+function fundingTotals(awards, since){
+  const byCampus = {}; let total = 0;
+  for (const a of awards){
+    const c = detectCampus(a.org || "", a.city || "").name, x = byCampus[c] || (byCampus[c] = { count: 0, total: 0 });
+    x.count++; x.total += a.amount || 0; total += a.amount || 0;
+  }
+  return { since, count: awards.length, total, byCampus, generated: nowISO() };
+}
+/** Fondos vinculados a profesores identificados vs. otorgados a la UPR (por agencia). */
+function coverageRows(S){
+  const T = STATE.fundingTotals || {}, rows = [];
+  const scopes = STATE.summary?.scopes || [], all = scopes.includes("Sistema UPR") || STATE.label === "Sistema UPR";
+  const loaded = [...S.campuses];
+  for (const k of ["nsf", "nih"]){
+    const t = T[k]; if (!t) continue;
+    const ag = k.toUpperCase();
+    const linked = S.awards.filter(a => a.agency === ag && (all || loaded.includes(detectCampus(a.org || "", "").name)));
+    const lt = linked.reduce((s, a) => s + (a.amount || 0), 0);
+    const denom = all ? t.total : loaded.reduce((s, c) => s + (t.byCampus?.[c]?.total || 0), 0);
+    const dcount = all ? t.count : loaded.reduce((s, c) => s + (t.byCampus?.[c]?.count || 0), 0);
+    rows.push({ ag, since: t.since, linked: lt, linkedN: linked.length, denom, dcount, total: t.total, count: t.count, all,
+      pct: denom ? Math.min(100, Math.round(100 * lt / denom)) : null });
+  }
+  return rows;
+}
+function coverageNote(S){
+  const rows = coverageRows(S);
+  if (!rows.length) return S.awards.length ? `<p class="note">Para ver qué parte de los fondos de la UPR está capturada, un administrador debe ejecutar de nuevo el paso 3 (financiamiento).</p>` : "";
+  return `<div class="notice coverage">${rows.map(r => `<div><b>${r.ag} desde ${r.since}:</b> ${money$(r.linked)} vinculados a profesores identificados (${fmt(r.linkedN)} proyectos), de ${money$(r.denom)} otorgados a la UPR${r.all ? "" : " en los recintos cargados"} (${fmt(r.dcount)} proyectos) · <b>${r.pct ?? "—"}% de cobertura</b>${r.all ? "" : ` · Total UPR, todos los recintos: ${money$(r.total)}`}</div>`).join("")}
+    <small>Lo no vinculado corresponde a proyectos cuyo investigador no tiene ORCID, no apareció en la búsqueda o no coincidió con suficiente confianza. Montos: NSF = total estimado del premio; NIH = suma de los años fiscales.</small></div>`;
+}

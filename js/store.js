@@ -123,12 +123,14 @@ const STORE = {
     const others = snap.researchers.filter(R => !w.researchers.some(x => x.orcid === R.orcid) && !inScope(R, scope));
     const n = this.apply({ ...w, researchers: [...w.researchers, ...others] });
     STATE.label = cur.label || w.label; STATE.summary = cur.summary || w.summary; this.harvestId = cur.id;
+    STATE.fundingTotals = { ...(cur.summary?.funding || {}), ...(w.fundingTotals || {}) };
     return n;
   },
   async loadLocal(){ const s = await IDB.get("current"); return s?.researchers?.length ? this.apply(s) : 0; },
   apply(snap){
     STATE.researchers.clear(); for (const R of snap.researchers) STATE.researchers.set(R.orcid, R);
     STATE.label = snap.label || ""; STATE.scope = snap.scope || snap.label || ""; STATE.createdAt = snap.createdAt || null; STATE.summary = snap.summary || null;
+    STATE.fundingTotals = snap.fundingTotals || snap.summary?.funding || null;
     this.savedAt = snap.savedAt || null; this.harvestId = snap.harvestId || null;
     return snap.researchers.length;
   },
@@ -147,7 +149,7 @@ const STORE = {
     if (this.isLight()) return false;
     const list = working();
     const ok = await IDB.put("current", { label: STATE.scope || STATE.label, scope: STATE.scope || STATE.label, createdAt: STATE.createdAt, savedAt: nowISO(),
-      harvestId: this.harvestId, unpublished, summary: harvestSummary(list), researchers: list });
+      harvestId: this.harvestId, unpublished, summary: harvestSummary(list), fundingTotals: STATE.fundingTotals || null, researchers: list });
     if (ok && APP_CONFIG.backend === "local") this.savedAt = nowISO();
     return ok;
   },
@@ -160,7 +162,7 @@ const STORE = {
     if (this.publishing) throw new Error("Ya hay una publicación en curso.");
     this.publishing = true;
     try {
-      const list = working(), scope = STATE.scope || STATE.label || "Sistema UPR", summary = { ...harvestSummary(list), scope }, S = AUTH.token;
+      const list = working(), scope = STATE.scope || STATE.label || "Sistema UPR", summary = { ...harvestSummary(list), scope, ...(STATE.fundingTotals ? { funding: STATE.fundingTotals } : {}) }, S = AUTH.token;
       const id = await SB.rpc("api_begin_harvest", { p_session: S, p_label: scope, p_meta: { engine: CAPACITY_ENGINE_VERSION, createdAt: STATE.createdAt, scope } });
       const CHUNK = 15;
       for (let i = 0; i < list.length; i += CHUNK){
@@ -185,6 +187,7 @@ const STORE = {
       const c = await SB.rpc("api_commit_harvest", { p_session: S, p_harvest: id, p_summary: summary });
       this.harvestId = id; this.savedAt = nowISO(); STATE.summary = c?.summary || summary;
       if (c?.label) STATE.label = c.label;
+      if (c?.summary?.funding) STATE.fundingTotals = c.summary.funding;
       this.published = { label: c?.label || scope, count: c?.researchers ?? list.length };
       await this.saveLocal(false);
       return { ok: true, id, count: list.length, total: this.published.count, label: this.published.label, scope };
@@ -201,6 +204,19 @@ const STORE = {
       for (const R of rows) if (!have.has(R.orcid) && !inScope(R, STATE.scope)){ STATE.researchers.set(R.orcid, R); added++; }
     }
     return added;
+  },
+  /** Respaldo completo de la versión publicada (registros completos), para restaurarla con «Importar JSON». */
+  async backup(onProgress){
+    const cur = await SB.rpc("api_get_current", { p_session: AUTH.token });
+    if (!cur) throw new Error("Todavía no hay una versión publicada.");
+    const rows = [];
+    for (let off = 0; off < (cur.researchers || 0); off += 100){
+      rows.push(...(await SB.rpc("api_export_researchers", { p_session: AUTH.token, p_harvest: cur.id, p_offset: off, p_limit: 100 }) || []));
+      onProgress && onProgress(rows.length, cur.researchers);
+    }
+    return { schema: "upr-capacity-backup/1", generated: nowISO(), label: cur.label, saved_at: cur.saved_at, harvest_id: cur.id,
+      scopes: cur.summary?.scopes || [cur.label], summary: cur.summary || null, fundingTotals: cur.summary?.funding || null,
+      engine_version: CAPACITY_ENGINE_VERSION, researchers: rows.map(R => { const { light, ...r } = R; return r; }) };
   },
   async clear(){ await IDB.del("current"); if (APP_CONFIG.backend === "local") this.savedAt = null; },
 };
