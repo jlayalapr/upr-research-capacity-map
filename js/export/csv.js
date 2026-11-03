@@ -91,6 +91,6 @@ function importCapacityJSON(obj){
   if (!obj || !Array.isArray(obj.researchers)) throw new Error("Archivo no reconocido (falta 'researchers').");
   STATE.researchers.clear();
   for (const R of obj.researchers) STATE.researchers.set(R.orcid, R);
-  STATE.label = obj.label || "Importado";
+  STATE.label = obj.label || "Importado"; STATE.scope = CAMPUSES.some(c => c.name === STATE.label) ? STATE.label : "Sistema UPR"; // un JSON importado reemplaza todo salvo que sea de un solo recinto
   return obj.researchers.length;
 }

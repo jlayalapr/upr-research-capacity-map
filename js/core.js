@@ -182,8 +182,12 @@ function deriveCollege(dept){
      capacity: {...} | null                  // Research Capacity Intelligence Layer
    }
    --------------------------------------------------------------------- */
-const STATE = { researchers: new Map(), label: "", createdAt: null };
+const STATE = { researchers: new Map(), label: "", scope: "", createdAt: null };
 const researchers = () => [...STATE.researchers.values()];
+/** Copia de trabajo del admin: registros completos (los "ligeros" vienen de la versión publicada). */
+const working = () => researchers().filter(R => !R.light);
+/** ¿El investigador pertenece al alcance de un harvest? ("Sistema UPR" = todos) */
+const inScope = (R, scope) => !scope || scope === "Sistema UPR" || String(R.affiliation?.campus || "").split(" | ").includes(scope);
 
 function slug(s){ return norm(s).replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,""); }
 function saveBlob(blob, name){

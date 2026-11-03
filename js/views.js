@@ -454,7 +454,7 @@ function viewAdmin(){
   $("adminStatus").innerHTML = `<div><b>${fmt(n)}</b> <span class="note">investigadores</span></div>
     <div><b>${fmt(researchers().filter(R => R.sources.openalex?.author).length)}</b> <span class="note">con OpenAlex</span></div>
     <div><b>${fmt(researchers().filter(R => R.capacity?.funding_record?.total_awards).length)}</b> <span class="note">con fondos NIH/NSF</span></div>
-    <div class="note">Conjunto: <b>${esc(STATE.label || "—")}</b> · Guardado: ${STORE.savedAt ? esc(new Date(STORE.savedAt).toLocaleString("es")) : "nunca"} · Almacenamiento: ${APP_CONFIG.backend === "local" ? "este navegador (IndexedDB)" : "base de datos Supabase"}${STORE.isLight() ? " · viendo la versión publicada" : ""}</div>`;
+    <div class="note">Copia de trabajo: <b>${esc(working().length ? `${STATE.scope || STATE.label} (${fmt(working().length)})` : "—")}</b> · Versión publicada: <b>${esc(STORE.published ? `${STORE.published.label} (${fmt(STORE.published.count)})` : "—")}</b> · Guardado: ${STORE.savedAt ? esc(new Date(STORE.savedAt).toLocaleString("es")) : "nunca"} · Almacenamiento: ${APP_CONFIG.backend === "local" ? "este navegador (IndexedDB)" : "base de datos Supabase"}${STORE.isLight() ? " · viendo la versión publicada" : ""}</div>`;
   updateButtons();
 }
 

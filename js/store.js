@@ -91,17 +91,21 @@ function harvestSummary(list){
 
 const STORE = {
   savedAt: null, harvestId: null, publishing: false,
-  isLight(){ return researchers().some(R => R.light); },
+  isLight(){ return !working().length; },
+  published: null, // { label, count } de la versión vigente en Supabase
 
   /** Carga los datos al abrir la aplicación. */
   async load(onProgress){
     if (APP_CONFIG.backend === "local") return this.loadLocal();
     const cur = await SB.rpc("api_get_current", { p_session: AUTH.token });
     if (!cur){ // sin datos publicados: si es admin, usar su copia local de trabajo
+      this.published = null;
       return AUTH.isAdmin() ? this.loadLocal() : 0;
     }
-    // copia de trabajo completa del admin, si corresponde a la misma versión o es más reciente
-    if (AUTH.isAdmin()){ const w = await IDB.get("current"); if (w?.researchers?.length && (w.harvestId === cur.id || w.unpublished)) return this.apply(w); }
+    this.published = { label: cur.label, count: cur.researchers };
+    // copia de trabajo completa del admin (un recinto o todo el sistema), si corresponde a la versión vigente o no se ha publicado
+    let w = null;
+    if (AUTH.isAdmin()){ w = await IDB.get("current"); if (!(w?.researchers?.length && (w.harvestId === cur.id || w.unpublished))) w = null; }
     let snap = await IDB.get(`hosted:${cur.id}`);
     if (!snap){
       const rows = [];
@@ -113,12 +117,18 @@ const STORE = {
       for (const k of await IDB.keys()) if (String(k).startsWith("hosted:")) await IDB.del(k);
       await IDB.put(`hosted:${cur.id}`, snap);
     }
-    return this.apply(snap);
+    if (!w) return this.apply(snap);
+    // admin: su copia de trabajo + los demás recintos de la versión publicada (en modo consulta)
+    const scope = w.scope || w.label;
+    const others = snap.researchers.filter(R => !w.researchers.some(x => x.orcid === R.orcid) && !inScope(R, scope));
+    const n = this.apply({ ...w, researchers: [...w.researchers, ...others] });
+    STATE.label = cur.label || w.label; STATE.summary = cur.summary || w.summary; this.harvestId = cur.id;
+    return n;
   },
   async loadLocal(){ const s = await IDB.get("current"); return s?.researchers?.length ? this.apply(s) : 0; },
   apply(snap){
     STATE.researchers.clear(); for (const R of snap.researchers) STATE.researchers.set(R.orcid, R);
-    STATE.label = snap.label || ""; STATE.createdAt = snap.createdAt || null; STATE.summary = snap.summary || null;
+    STATE.label = snap.label || ""; STATE.scope = snap.scope || snap.label || ""; STATE.createdAt = snap.createdAt || null; STATE.summary = snap.summary || null;
     this.savedAt = snap.savedAt || null; this.harvestId = snap.harvestId || null;
     return snap.researchers.length;
   },
@@ -135,8 +145,9 @@ const STORE = {
   /** Guarda la copia de trabajo (admin) en este navegador. */
   async saveLocal(unpublished = true){
     if (this.isLight()) return false;
-    const ok = await IDB.put("current", { label: STATE.label, createdAt: STATE.createdAt, savedAt: nowISO(), harvestId: this.harvestId,
-      unpublished, summary: harvestSummary(researchers()), researchers: researchers() });
+    const list = working();
+    const ok = await IDB.put("current", { label: STATE.scope || STATE.label, scope: STATE.scope || STATE.label, createdAt: STATE.createdAt, savedAt: nowISO(),
+      harvestId: this.harvestId, unpublished, summary: harvestSummary(list), researchers: list });
     if (ok && APP_CONFIG.backend === "local") this.savedAt = nowISO();
     return ok;
   },
@@ -149,8 +160,8 @@ const STORE = {
     if (this.publishing) throw new Error("Ya hay una publicación en curso.");
     this.publishing = true;
     try {
-      const list = researchers(), summary = harvestSummary(list), S = AUTH.token;
-      const id = await SB.rpc("api_begin_harvest", { p_session: S, p_label: STATE.label || "Sin título", p_meta: { engine: CAPACITY_ENGINE_VERSION, createdAt: STATE.createdAt } });
+      const list = working(), scope = STATE.scope || STATE.label || "Sistema UPR", summary = { ...harvestSummary(list), scope }, S = AUTH.token;
+      const id = await SB.rpc("api_begin_harvest", { p_session: S, p_label: scope, p_meta: { engine: CAPACITY_ENGINE_VERSION, createdAt: STATE.createdAt, scope } });
       const CHUNK = 15;
       for (let i = 0; i < list.length; i += CHUNK){
         const part = list.slice(i, i + CHUNK), orcids = part.map(R => R.orcid);
@@ -171,11 +182,25 @@ const STORE = {
         await SB.rpc("api_put_awards", { p_session: S, p_harvest: id, p_orcids: orcids, p_rows: awards });
         onProgress && onProgress(Math.min(i + CHUNK, list.length), list.length);
       }
-      await SB.rpc("api_commit_harvest", { p_session: S, p_harvest: id, p_summary: summary });
-      this.harvestId = id; this.savedAt = nowISO(); STATE.summary = summary;
+      const c = await SB.rpc("api_commit_harvest", { p_session: S, p_harvest: id, p_summary: summary });
+      this.harvestId = id; this.savedAt = nowISO(); STATE.summary = c?.summary || summary;
+      if (c?.label) STATE.label = c.label;
+      this.published = { label: c?.label || scope, count: c?.researchers ?? list.length };
       await this.saveLocal(false);
-      return { ok: true, id, count: list.length };
+      return { ok: true, id, count: list.length, total: this.published.count, label: this.published.label, scope };
     } finally { this.publishing = false; }
+  },
+  /** Tras publicar un recinto: añade (en modo consulta) los demás recintos de la versión vigente. */
+  async mergePublished(){
+    const total = this.published?.count || 0, have = new Set(working().map(R => R.orcid));
+    if (APP_CONFIG.backend === "local" || !this.harvestId || total <= have.size) return 0;
+    for (const R of researchers()) if (R.light) STATE.researchers.delete(R.orcid);
+    let added = 0;
+    for (let off = 0; off < total; off += 200){
+      const rows = await SB.rpc("api_get_researchers", { p_session: AUTH.token, p_harvest: this.harvestId, p_offset: off, p_limit: 200 }) || [];
+      for (const R of rows) if (!have.has(R.orcid) && !inScope(R, STATE.scope)){ STATE.researchers.set(R.orcid, R); added++; }
+    }
+    return added;
   },
   async clear(){ await IDB.del("current"); if (APP_CONFIG.backend === "local") this.savedAt = null; },
 };

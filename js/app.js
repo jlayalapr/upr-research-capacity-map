@@ -34,7 +34,8 @@ async function persistAndRefresh(){
       try {
         setPub("Publicando en la base de datos…");
         const r = await STORE.publish((n, t) => setPub(`Publicando en la base de datos: ${n} de ${t} investigadores…`));
-        setPub(`✓ Publicado: ${r.count} investigadores · ${new Date().toLocaleString("es")}. Los visitantes ya ven esta versión.`);
+        try { await STORE.mergePublished(); } catch(e){ console.warn(e); }
+        setPub(`✓ Publicado ${r.scope}: ${r.count} investigadores · ${new Date().toLocaleString("es")}. Versión vigente: ${r.label} (${r.total} investigadores en total). Los visitantes ya la ven.`);
       } catch(e){
         setPub(`✗ No se pudo publicar: ${e.message} Tu copia de trabajo quedó guardada en este navegador; usa «Publicar ahora» para reintentar.`);
         if (e instanceof AuthError){ alert(e.message); }
@@ -54,7 +55,7 @@ async function loadData(){
 function refreshAll(){ updateButtons(); refreshCacheInfo(); campusButtons(); rerender(); }
 function campusButtons(){
   const box = $("campusButtons"); box.innerHTML = "";
-  if (STATE.label !== "Sistema UPR" || !STATE.researchers.size) return;
+  if (uniq(researchers().flatMap(R => R.affiliation.campus.split(" | "))).length < 2) return;
   box.innerHTML = `<span class="note">CSV por recinto:</span>`;
   for (const c of [...CAMPUSES, GENERAL]){
     const list = researchers().filter(R => R.affiliation.campus.split(" | ").includes(c.name));
@@ -73,7 +74,10 @@ $("start").onclick = async () => {
   if (broad && !verify){ alert("La búsqueda amplia requiere verificar el empleo."); return; }
 
   searchAbort = new AbortController(); const signal = searchAbort.signal;
-  STATE.researchers.clear(); STATE.label = target ? target.name : "Sistema UPR"; STATE.createdAt = nowISO();
+  // Solo se reemplaza el alcance de este harvest; los demás recintos publicados se conservan.
+  const scope = target ? target.name : "Sistema UPR";
+  for (const R of researchers()) if (!R.light || inScope(R, scope)) STATE.researchers.delete(R.orcid);
+  STATE.scope = scope; if (!target) STATE.label = scope; STATE.createdAt = nowISO();
   $("log").textContent = ""; $("bar").style.width = "0";
   ["sFound","sChecked","sKept"].forEach(k => $(k).textContent = "0");
   $("start").disabled = true; $("stop").disabled = false; refreshAll();
@@ -113,18 +117,18 @@ $("start").onclick = async () => {
           if (target) keep = keep.filter(e => e.campus === target.name);
           if (keep.length){
             STATE.researchers.set(p["orcid-id"], makeResearcher(p, uniq(keep.map(e => e.campus)).join(" | "), keep));
-            $("sKept").textContent = STATE.researchers.size;
+            $("sKept").textContent = working().length;
           }
         } catch(e){ if (!signal.aborted) log("log", `  ✗ ${p["orcid-id"]}: ${e.message}`); }
         done++; $("sChecked").textContent = done; setBar(0.1 + 0.9*done/list.length);
       }, signal);
     }
     setBar(1);
-    log("log", signal.aborted ? "Detenido. Puedes trabajar con lo obtenido." : `✓ Terminado: ${STATE.researchers.size} profesores.`);
+    log("log", signal.aborted ? "Detenido. Puedes trabajar con lo obtenido." : `✓ Terminado: ${working().length} profesores.`);
   } catch(e){
     if (!signal.aborted){ log("log", "✗ Error: " + e.message); if (e instanceof TypeError) log("log", "  Posible bloqueo de red/CORS. Verifica la conexión."); }
   } finally {
-    $("sKept").textContent = STATE.researchers.size;
+    $("sKept").textContent = working().length;
     $("start").disabled = false; $("stop").disabled = true; await persistAndRefresh();
   }
 };
@@ -137,11 +141,11 @@ $("oaBtn").onclick = async () => {
   CACHE.persist = $("persistCache").checked;
   const remember = $("oaRemember").checked;
   try { localStorage.setItem("uprcap:settings", JSON.stringify({key: remember ? OA_CFG.apiKey : "", max: OA_CFG.maxWorks, remember})); } catch {}
-  const pending = researchers().filter(R => !CACHE.get(`oa:works:${R.sources.openalex?.author?.id}:${OA_CFG.maxWorks}`).hit).length;
+  const pending = working().filter(R => !CACHE.get(`oa:works:${R.sources.openalex?.author?.id}:${OA_CFG.maxWorks}`).hit).length;
   const estCalls = pending * Math.max(1, Math.ceil(Math.min(OA_CFG.maxWorks, 150) / 200)) + (OA_CFG.nameCandidates ? pending * 10 * 0.3 : 0);
   if (!OA_CFG.apiKey && estCalls > 700 && !confirm(`Sin API key, OpenAlex permite unas 1,000 consultas al día y esta corrida necesita aproximadamente ${Math.round(estCalls)}. Es probable que se agote el presupuesto a mitad de camino.\n\nRecomendado: crea una key gratuita en openalex.org/settings/api y pégala en el campo.\n\n¿Continuar de todos modos?`)) return;
   oaAbort = new AbortController(); const signal = oaAbort.signal;
-  const list = researchers();
+  const list = working();
   $("oalog").textContent = ""; $("oabar").style.width = "0";
   $("oaBtn").disabled = true; $("oaStop").disabled = false; $("start").disabled = true;
   const net0 = {...NET};
@@ -192,7 +196,7 @@ $("fundBtn").onclick = async () => {
   FUND_CFG.includeMedium = $("fundMedium").checked;
   const svcs = [["nih", NIH, "fNih"], ["nsf", NSF, "fNsf"]].filter(([k]) => $(k === "nih" ? "fundNih" : "fundNsf").checked);
   if (!svcs.length){ alert("Selecciona al menos una fuente."); return; }
-  fundAbort = new AbortController(); const signal = fundAbort.signal, list = researchers();
+  fundAbort = new AbortController(); const signal = fundAbort.signal, list = working();
   $("flog").textContent = ""; $("fbar").style.width = "0";
   $("fundBtn").disabled = true; $("fundStop").disabled = false;
   try {
@@ -222,7 +226,7 @@ $("fundBtn").onclick = async () => {
   finally { $("fundStop").disabled = true; await persistAndRefresh(); }
 };
 $("fundStop").onclick = () => fundAbort?.abort();
-$("fundMedium").addEventListener("change", async () => { FUND_CFG.includeMedium = $("fundMedium").checked; if (!STORE.isLight() && researchers().some(R => R.sources.nih || R.sources.nsf)){ await buildAllProfiles(researchers()); await persistAndRefresh(); } });
+$("fundMedium").addEventListener("change", async () => { FUND_CFG.includeMedium = $("fundMedium").checked; if (!STORE.isLight() && working().some(R => R.sources.nih || R.sources.nsf)){ await buildAllProfiles(working()); await persistAndRefresh(); } });
 
 /* ---------- Mapa por recinto ---------- */
 ["mapMetric","mapCat","mapFilter","mapLinks"].forEach(id => $(id).addEventListener("input", () => { $("heatList").innerHTML = ""; renderCampusMap(); }));
