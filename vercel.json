@@ -1,15 +1,35 @@
 {
   "rewrites": [
-    { "source": "/proxy/:svc/:path*", "destination": "/api/proxy?svc=:svc&path=:path*" }
+    {
+      "source": "/proxy/:svc/:path*",
+      "destination": "/api/proxy?svc=:svc&path=:path*"
+    }
   ],
   "functions": {
-    "api/proxy.js": { "maxDuration": 60 }
+    "api/proxy.js": {
+      "maxDuration": 60
+    }
   },
   "headers": [
-    { "source": "/(.*)", "headers": [
-      { "key": "X-Content-Type-Options", "value": "nosniff" },
-      { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
-      { "key": "X-Frame-Options", "value": "DENY" }
-    ] }
-  ]
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        }
+      ]
+    }
+  ],
+  "buildCommand": "node build.mjs",
+  "outputDirectory": "dist",
+  "framework": null
 }
