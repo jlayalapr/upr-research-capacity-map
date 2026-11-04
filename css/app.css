@@ -243,3 +243,8 @@ table.mini th { font-weight: 600; font-size: 12px; opacity: .8; }
 .notice.coverage { margin: 0 0 16px; display: grid; gap: 6px; }
 .notice.coverage small { opacity: .8; }
 .notice ul { margin: 6px 0 0; padding-left: 20px; }
+table.heat td[data-pcell]{cursor:pointer;text-align:center;border-radius:4px}
+table.heat td[data-pcell]:hover{outline:2px solid var(--s1)}
+table.mini td.num, table.mini th.num{text-align:right}
+.tablewrap{overflow-x:auto;max-width:100%}
+@media (max-width:560px){ .topbar{gap:8px} .topbar .t-search{min-width:0} .user-chip{gap:6px;flex-shrink:0} .user-chip .avatar{display:none} }
