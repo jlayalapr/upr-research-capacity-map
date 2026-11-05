@@ -164,9 +164,16 @@ const STORE = {
     try {
       const list = working(), scope = STATE.scope || STATE.label || "Sistema UPR", summary = { ...harvestSummary(list), scope, ...(STATE.fundingTotals ? { funding: STATE.fundingTotals } : {}) }, S = AUTH.token;
       const id = await SB.rpc("api_begin_harvest", { p_session: S, p_label: scope, p_meta: { engine: CAPACITY_ENGINE_VERSION, createdAt: STATE.createdAt, scope } });
-      const CHUNK = 15;
-      for (let i = 0; i < list.length; i += CHUNK){
-        const part = list.slice(i, i + CHUNK), orcids = part.map(R => R.orcid);
+      // Lotes de hasta 15 investigadores o ~1.5 MB (algunos perfiles con muchas publicaciones pesan más de 1 MB).
+      const batches = []; let cur = [], size = 0;
+      for (const R of list){ const n = JSON.stringify(R).length;
+        if (cur.length && (cur.length >= 15 || size + n > 1.5e6)){ batches.push(cur); cur = []; size = 0; }
+        cur.push(R); size += n; }
+      if (cur.length) batches.push(cur);
+      let done = 0;
+      try {
+      for (const part of batches){
+        const orcids = part.map(R => R.orcid);
         const rows = part.map(R => { const m = R.sources.openalex?.metrics, P = R.capacity;
           return { orcid: R.orcid, name: fullName(R), campus: R.affiliation.campus, department: R.affiliation.dept, college: R.affiliation.college,
             primary_field: P?.primary_field?.capacity || null, openalex_id: R.sources.openalex?.author?.id || null,
@@ -182,9 +189,10 @@ const STORE = {
           title: a.title, unit: a.unit, unit_name: a.unit_name, mechanism: a.mechanism, first_year: a.first_year, last_year: a.last_year,
           amount: a.amount, is_active: !!a.is_active, role: a.match?.role, match_level: a.match?.level, url: a.url }))));
         await SB.rpc("api_put_awards", { p_session: S, p_harvest: id, p_orcids: orcids, p_rows: awards });
-        onProgress && onProgress(Math.min(i + CHUNK, list.length), list.length);
+        done += part.length; onProgress && onProgress(done, list.length);
       }
-      const c = await SB.rpc("api_commit_harvest", { p_session: S, p_harvest: id, p_summary: summary });
+      var c = await SB.rpc("api_commit_harvest", { p_session: S, p_harvest: id, p_summary: summary });
+      } catch(e){ try { await SB.rpc("api_abort_harvest", { p_session: S, p_harvest: id }); } catch {} throw e; }
       this.harvestId = id; this.savedAt = nowISO(); STATE.summary = c?.summary || summary;
       if (c?.label) STATE.label = c.label;
       if (c?.summary?.funding) STATE.fundingTotals = c.summary.funding;
