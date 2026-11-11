@@ -386,7 +386,9 @@ async function drawCalls(areas){
           <div style="margin:6px 0">${c.areas.map(l => `<span class="tag">${esc(l)}</span>`).join("")}</div>
           <div class="meta">Investigadores UPR con capacidad: ${people.map(R => `<a href="#/investigador/${esc(R.orcid)}">${esc(fullName(R))}</a>`).join(", ") || "—"}</div></div>
         <div class="deadline ${days !== null && days <= 30 ? "soon" : ""}">Fecha límite<b>${d ? esc(c.closeDate) : (c.status === "forecasted" ? "Por anunciar" : "Continua / no indicada")}</b>${days !== null && days >= 0 ? `${days} día(s)` : ""}
-          <div><button class="bm ${bm[c.id] ? "on" : ""}" data-bm="${esc(c.id)}" title="Guardar convocatoria" aria-label="Guardar">${bm[c.id] ? "★" : "☆"}</button></div></div></div>`; }).join("") || `<div class="empty"><b>No hay convocatorias que coincidan.</b></div>`;
+          <div><button class="bm ${bm[c.id] ? "on" : ""}" data-bm="${esc(c.id)}" title="Guardar convocatoria" aria-label="Guardar">${bm[c.id] ? "★" : "☆"}</button></div>
+          ${AUTH.isAdmin() ? `<div><button class="btn om-btn" data-mail="${esc(c.id)}" title="Borrador de correo para el equipo sugerido">✉ Preparar correo</button></div>` : ""}</div></div>`; }).join("") || `<div class="empty"><b>No hay convocatorias que coincidan.</b></div>`;
+    $("callList").querySelectorAll("[data-mail]").forEach(b => b.onclick = () => openOutreach(CALLS.get(b.dataset.mail), areas));
     $("callList").querySelectorAll("[data-bm]").forEach(b => b.onclick = () => { const on = BM.toggle(CALLS.get(b.dataset.bm)); b.classList.toggle("on", on); b.textContent = on ? "★" : "☆"; if (OPP.saved) draw(); });
   };
   $("callQ").addEventListener("input", e => { OPP.q = e.target.value; draw(); });
