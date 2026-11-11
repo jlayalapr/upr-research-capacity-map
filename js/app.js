@@ -145,7 +145,7 @@ $("oaBtn").onclick = async () => {
   CACHE.persist = $("persistCache").checked;
   const remember = $("oaRemember").checked;
   try { localStorage.setItem("uprcap:settings", JSON.stringify({key: remember ? OA_CFG.apiKey : "", max: OA_CFG.maxWorks, remember})); } catch {}
-  const pending = working().filter(R => !CACHE.get(`oa:works:${R.sources.openalex?.author?.id}:${OA_CFG.maxWorks}`).hit).length;
+  const pending = working().filter(R => !CACHE.get(`oa:works2:${R.sources.openalex?.author?.id}:${OA_CFG.maxWorks}`).hit).length;
   const estCalls = pending * Math.max(1, Math.ceil(Math.min(OA_CFG.maxWorks, 150) / 200)) + (OA_CFG.nameCandidates ? pending * 10 * 0.3 : 0);
   if (!OA_CFG.apiKey && estCalls > 700 && !confirm(`Sin API key, OpenAlex permite unas 1,000 consultas al día y esta corrida necesita aproximadamente ${Math.round(estCalls)}. Es probable que se agote el presupuesto a mitad de camino.\n\nRecomendado: crea una key gratuita en openalex.org/settings/api y pégala en el campo.\n\n¿Continuar de todos modos?`)) return;
   oaAbort = new AbortController(); const signal = oaAbort.signal;
@@ -199,7 +199,8 @@ $("fundBtn").onclick = async () => {
   FUND_CFG.since = clamp(Number($("fundSince").value) || CURRENT_YEAR - 15, 1985, CURRENT_YEAR);
   FUND_CFG.includeMedium = $("fundMedium").checked;
   const svcs = [["nih", NIH, "fNih"], ["nsf", NSF, "fNsf"]].filter(([k]) => $(k === "nih" ? "fundNih" : "fundNsf").checked);
-  if (!svcs.length){ alert("Selecciona al menos una fuente."); return; }
+  const withOrcid = $("fundOrcid").checked;
+  if (!svcs.length && !withOrcid){ alert("Selecciona al menos una fuente."); return; }
   fundAbort = new AbortController(); const signal = fundAbort.signal, list = working();
   $("flog").textContent = ""; $("fbar").style.width = "0";
   $("fundBtn").disabled = true; $("fundStop").disabled = false;
@@ -223,6 +224,16 @@ $("fundBtn").onclick = async () => {
     $("fMatched").textContent = all.filter(a => a.match.level === "high").length;
     $("fMedium").textContent = all.filter(a => a.match.level === "medium").length;
     $("fAmb").textContent = all.filter(a => a.match.level === "ambiguous").length;
+    if (withOrcid && !signal.aborted){
+      log("flog", `Leyendo los fondos declarados en ORCID de ${list.length} persona(s)…`);
+      let done = 0, withF = 0, items = 0;
+      await pool(list, 8, async R => {
+        try { const f = await ORCID.fundings(R.orcid, signal); R.sources.orcid_funding = { ...prov("ORCID", "funding-declared"), items: f }; if (f.length){ withF++; items += f.length; } }
+        catch(e){ if (!signal.aborted) log("flog", `  ✗ ${R.orcid}: ${e.message}`); }
+        done++; if (done % 25 === 0 || done === list.length) $("fundMode").textContent = `ORCID: ${done} de ${list.length}`;
+      }, signal);
+      log("flog", `  ${withF} persona(s) declaran ${items} fondo(s) en ORCID.`);
+    }
     log("flog", "Actualizando perfiles de capacidad…");
     await buildAllProfiles(list);
     $("fPeople").textContent = list.filter(R => R.capacity?.funding_record?.total_awards).length;

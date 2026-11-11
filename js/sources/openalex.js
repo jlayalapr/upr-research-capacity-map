@@ -10,7 +10,7 @@ const OA_BASE = "https://api.openalex.org";
 // sin key ≈ US$0.10/día, con key gratuita ≈ US$1/día. Consultas de un solo registro: gratis;
 // listas/filtros ≈ US$0.0001; búsquedas por texto ≈ US$0.001. El parámetro mailto ya no se usa.
 const OA_CFG = { apiKey: "", maxWorks: 500, nameCandidates: false };
-const OA_SELECT = "id,doi,title,publication_year,publication_date,type,primary_location,cited_by_count,authorships,topics,primary_topic,keywords,open_access,abstract_inverted_index,language";
+const OA_SELECT = "id,doi,title,publication_year,publication_date,type,primary_location,cited_by_count,authorships,topics,primary_topic,keywords,open_access,abstract_inverted_index,language,awards,funders";
 const MAX_AUTHORS_STORED = 60;     // autores por trabajo que se guardan (artículos de consorcio tienen miles)
 const BIG_TEAM = 100;              // trabajos con más autores no cuentan para la red de colaboración
 
@@ -69,6 +69,9 @@ function compactWork(w, selfIds){
     oa: { is_oa: !!w.open_access?.is_oa, status: w.open_access?.oa_status||"", url: w.open_access?.oa_url||"" },
     abstract: abstractFrom(w.abstract_inverted_index),
     language: w.language||"",
+    // financiadores agradecidos (se omiten los consorcios con muchos financiadores, p. ej., CERN)
+    awards: (w.funders||[]).length <= 10 ? (w.awards||[]).map(a => ({ funder: a.funder_display_name||"", award: a.funder_award_id||"" })).filter(a => a.funder) : [],
+    n_funders: (w.funders||[]).length,
   };
 }
 
@@ -132,7 +135,7 @@ const OPENALEX = {
 
   /** Trabajos de uno o más Author IDs (paginación por cursor). */
   async works(authorIds, signal, max){
-    const key = `oa:works:${authorIds.join("|")}:${max}`;
+    const key = `oa:works2:${authorIds.join("|")}:${max}`;
     const c = CACHE.get(key); if (c.hit){ NET.cacheHits++; return c.value; }
     const selfIds = new Set(authorIds);
     const out = []; let cursor = "*", useSelect = true, total = 0;
@@ -161,6 +164,7 @@ const OPENALEX = {
       const w = await this.works(ids, signal, OA_CFG.maxWorks);
       src.works = w.items; src.works_total = w.total; src.works_truncated = w.truncated;
       src.metrics = computeMetrics(m.author, m.alternates, w.items);
+      src.funding_ack = summarizeAcknowledged(w.items);
     }
     R.sources.openalex = src;
     R.discrepancies = compareSources(R);
@@ -169,6 +173,22 @@ const OPENALEX = {
 };
 
 function hIndex(cites){ const s = [...cites].sort((a,b) => b-a); let h = 0; while (h < s.length && s[h] >= h+1) h++; return h; }
+/** Subvenciones agradecidas en sus publicaciones: una entrada por financiador + número de premio. */
+function summarizeAcknowledged(works){
+  const by = new Map();
+  for (const w of works) for (const a of (w.awards || [])){
+    const k = `${norm(a.funder)}|${normAwardId(a.award)}`;
+    const x = by.get(k) || by.set(k, { funder: a.funder, award: a.award, works: 0, first: null, last: null, sample: [] }).get(k);
+    x.works++; if (w.year){ x.first = Math.min(x.first ?? w.year, w.year); x.last = Math.max(x.last ?? w.year, w.year); }
+    if (x.sample.length < 3) x.sample.push(w.id);
+  }
+  return [...by.values()].sort((a, b) => b.works - a.works).slice(0, 60);
+}
+function normAwardId(s){
+  const n = String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const nih = /([A-Z]\d{2}[A-Z]{2}\d{6})/.exec(n); if (nih) return nih[1];
+  return n;
+}
 function computeMetrics(a, alts, works){
   const years = works.map(w => w.year).filter(Boolean);
   const multi = alts.length > 0;

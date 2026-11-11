@@ -36,6 +36,21 @@ const ORCID = {
     return out;
   },
 
+  /** Fondos declarados por el investigador en su ORCID (sección «Fundings»). */
+  async fundings(id, signal){
+    const data = await getJSON(`${API}/${id}/fundings`, signal);
+    const out = [];
+    for (const g of (data?.group || [])){
+      const s = (g["funding-summary"] || [])[0]; if (!s) continue;
+      const ext = (s["external-ids"]?.["external-id"] || g["external-ids"]?.["external-id"] || []);
+      const num = ext.find(e => /grant|award|contract|number/i.test(e["external-id-type"] || ""))?.["external-id-value"] || ext[0]?.["external-id-value"] || "";
+      const org = s.organization || {};
+      out.push({ title: s.title?.title?.value || "", type: s.type || "", funder: org.name || "", funder_id: org["disambiguated-organization"]?.["disambiguated-organization-identifier"] || "",
+        start: ymd(s["start-date"]), end: ymd(s["end-date"]), award: num, url: s.url?.value || ext.find(e => e["external-id-url"]?.value)?.["external-id-url"]?.value || "" });
+    }
+    return out;
+  },
+
   /** Registro completo (persona + actividades). Caché solo de sesión: puede ser grande. */
   record(id, signal){ return cached(`orcid:record:${id}`, () => getJSON(`${API}/${id}/record`, signal), false); },
 };

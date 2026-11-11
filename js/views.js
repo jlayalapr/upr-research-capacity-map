@@ -224,7 +224,9 @@ function viewInvestigador(el, r){
         ${R.discrepancies?.length ? `<div class="disc">Hay ${R.discrepancies.length} diferencia(s) entre ORCID y OpenAlex. <a href="#/investigador/${esc(R.orcid)}/fuentes">Ver</a></div>` : ""}
       </div></div>`;
   } else if (tab === "proyectos"){
-    box.innerHTML = fundingBlock(R) + (P?.funding_record?.total_awards ? `<h3>Resumen</h3>${trackBlock(P)}` : "");
+    const drawP = () => { box.innerHTML = fundingBlock(R) + (P?.funding_record?.total_awards ? `<h3>Resumen</h3>${trackBlock(P)}` : "") + otherFundingBlock(R); };
+    drawP();
+    if (!FEDERAL.data && (R.sources.orcid_funding || R.sources.openalex?.funding_ack)) FEDERAL.load().then(() => { USA_INDEX = null; if (document.body.contains(box)) drawP(); }).catch(() => {});
   } else if (tab === "publicaciones"){
     const works = oa?.works || [];
     if (!works.length){ box.innerHTML = `<p class="note">${oa ? "Sin publicaciones vinculadas en OpenAlex." : "Aún no se ha consultado OpenAlex."}</p>`; return; }
@@ -255,12 +257,19 @@ function viewInvestigador(el, r){
 function viewCapacidades(){ try { renderCampusMap(); } catch(e){ console.error(e); } setTimeout(() => { if (MAPV.map) MAPV.map.invalidateSize(); }, 60); }
 
 /* =============================== PROYECTOS =============================== */
-const PRJ = { status:"", campus:"", agency:"", unit:"", q:"" };
+const PRJ = { status:"", campus:"", agency:"", unit:"", q:"", tab:"nihnsf" };
 function viewProyectos(el){
   const S = sys();
+  const segP = `<span class="seg" id="prjTab"><button data-t="nihnsf" class="${PRJ.tab !== "otras" ? "on" : ""}">NIH y NSF</button><button data-t="otras" class="${PRJ.tab === "otras" ? "on" : ""}">Otras agencias y fuentes</button></span>`;
+  const bindTab = () => $("prjTab").onclick = e => { const b = e.target.closest("button"); if (!b) return; PRJ.tab = b.dataset.t; viewProyectos(el); };
+  if (PRJ.tab === "otras"){
+    el.innerHTML = head(`${icon("flask")} Proyectos`, "Proyectos de Investigación", `Fondos de otras agencias y fuentes vinculados a profesores de la UPR por su ORCID ${SRC.orcid}`, segP) + `<div id="othBox"></div>`;
+    bindTab(); return drawOtherProjects($("othBox"));
+  }
   const units = uniq(S.awards.map(a => `${a.agency} ${a.unit}`.trim())).sort();
   const opt = (v, cur, l=v) => `<option value="${esc(v)}" ${v === cur ? "selected" : ""}>${esc(l)}</option>`;
-  el.innerHTML = head(`${icon("flask")} Proyectos`, "Proyectos de Investigación", `Proyectos NIH y NSF vinculados a profesores de la UPR ${SRC.fund}`)
+  setTimeout(bindTab, 0);
+  el.innerHTML = head(`${icon("flask")} Proyectos`, "Proyectos de Investigación", `Proyectos NIH y NSF vinculados a profesores de la UPR ${SRC.fund}`, segP)
     + (!S.awards.length ? `<div class="empty"><b>Aún no hay proyectos vinculados.</b>${AUTH.isAdmin() ? `Ejecuta "Buscar financiamiento" en <a href="#/admin">Administración</a>.` : "Un administrador debe ejecutar la búsqueda de financiamiento."}</div>` : `${coverageNote(S)}
     <div class="filters"><input type="search" id="prjQ" placeholder="Buscar por título o investigador…" value="${esc(PRJ.q)}">
       <select id="prjStatus"><option value="">Estado</option>${opt("on", PRJ.status, "Vigente")}${opt("off", PRJ.status, "Finalizado")}</select>
