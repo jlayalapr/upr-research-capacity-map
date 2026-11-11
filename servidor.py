@@ -19,7 +19,7 @@ import http.server, socketserver, urllib.request, urllib.error, os, sys, webbrow
 
 PORT = int(os.environ.get("PORT", "8000"))
 ROOT = os.path.dirname(os.path.abspath(__file__))
-UPSTREAM = {"nih": "https://api.reporter.nih.gov", "nsf": "https://api.nsf.gov", "grants": "https://api.grants.gov"}
+UPSTREAM = {"nih": "https://api.reporter.nih.gov", "nsf": "https://api.nsf.gov", "grants": "https://api.grants.gov", "usa": "https://api.usaspending.gov"}
 MAX_BODY = 1_000_000
 
 

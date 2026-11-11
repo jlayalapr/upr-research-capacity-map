@@ -150,7 +150,7 @@ const CAMPUSES = [
   {id:"ac",  name:"Administración Central",q:`(${UPR} AND ("Central Administration" OR "Administracion Central" OR "Administración Central"))`, kw:["central administration","administracion central"]},
 ];
 const GENERAL = {id:"gen", name:"UPR (recinto no especificado)"};
-const EXCLUDE = ["inter american","interamerican","interamericana","polytechnic","politecnica","catholic","catolica","pontific","ana g. mendez","ana g mendez","turabo","metropolitan","metropolitana","sagrado","central del caribe","ponce health sciences","ponce school of medicine","carlos albizu","caribbean university","american university of puerto rico","universidad del este"];
+const EXCLUDE = ["edp university","edp college","inter american","interamerican","interamericana","polytechnic","politecnica","catholic","catolica","pontific","ana g. mendez","ana g mendez","turabo","metropolitan","metropolitana","sagrado","central del caribe","ponce health sciences","ponce school of medicine","carlos albizu","caribbean university","american university of puerto rico","universidad del este"];
 
 function isUPR(name){
   const n = norm(name);

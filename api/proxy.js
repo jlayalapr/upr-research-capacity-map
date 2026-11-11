@@ -9,6 +9,7 @@ const UPSTREAM = {
   nih:    { base: "https://api.reporter.nih.gov", role: "admin" },
   nsf:    { base: "https://api.nsf.gov",          role: "admin" },
   grants: { base: "https://api.grants.gov",       role: "viewer" },
+  usa:    { base: "https://api.usaspending.gov",  role: "admin" },
 };
 const MAX_BODY = 1_000_000;
 
