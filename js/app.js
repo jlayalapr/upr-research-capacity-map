@@ -46,7 +46,7 @@ async function persistAndRefresh(){
 }
 async function loadData(){
   const box = $("loadingBox"); box.hidden = false; box.textContent = "Cargando datos…";
-  try { await STORE.load((n, t) => box.textContent = `Cargando datos: ${n} de ${t} investigadores…`); await PEOPLE.load(); }
+  try { await STORE.load((n, t) => box.textContent = `Cargando datos: ${n} de ${t} investigadores…`); await PEOPLE.load(); await OUTREACH.load(); }
   catch(e){
     if (e instanceof AuthError){ await AUTH.logout(); }
     else alert("No se pudieron cargar los datos: " + e.message);

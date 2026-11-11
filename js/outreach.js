@@ -20,6 +20,35 @@ GRANTS.detail = async function(id, signal){
   return d;
 };
 
+/* ---------- registro de envíos (solo admin) ---------- */
+const RESP = ["Sin respuesta","Interesado","Reunión coordinada","Sometió propuesta","No le interesa"];
+const OUTREACH = {
+  list: [], loaded: false,
+  async load(){
+    this.list = []; this.loaded = false;
+    if (!AUTH.isAdmin()) return;
+    try { this.list = APP_CONFIG.backend === "local" ? (await IDB.get("outreach") || []) : (await SB.rpc("api_get_outreach", { p_session: AUTH.token }) || []); this.loaded = true; }
+    catch(e){ console.warn("outreach", e); }
+  },
+  async persistLocal(){ await IDB.put("outreach", this.list); },
+  async log(entry){
+    let v;
+    if (APP_CONFIG.backend === "local"){ v = { id: String(Date.now()), created_at: nowISO(), ...entry }; this.list.unshift(v); await this.persistLocal(); return v; }
+    v = await SB.rpc("api_log_outreach", { p_session: AUTH.token, p_entry: entry }); this.list.unshift(v); return v;
+  },
+  async update(id, recipients, note){
+    const i = this.list.findIndex(x => x.id === id); if (i < 0) return;
+    if (APP_CONFIG.backend === "local"){ this.list[i] = { ...this.list[i], recipients, note }; await this.persistLocal(); return this.list[i]; }
+    const v = await SB.rpc("api_update_outreach", { p_session: AUTH.token, p_id: id, p_recipients: recipients, p_note: note || "" }); this.list[i] = v; return v;
+  },
+  async del(id){
+    if (APP_CONFIG.backend !== "local") await SB.rpc("api_delete_outreach", { p_session: AUTH.token, p_id: id });
+    this.list = this.list.filter(x => x.id !== id); if (APP_CONFIG.backend === "local") await this.persistLocal();
+  },
+  byOpp(id){ return this.list.filter(x => x.opp_id === String(id)); },
+  countFor(orcid){ return this.list.filter(x => (x.recipients || []).some(r => r.orcid === orcid)).length; },
+};
+
 const SIGN_KEY = "uprcap:signature";
 const sigGet = () => { try { return JSON.parse(localStorage.getItem(SIGN_KEY) || "{}"); } catch { return {}; } };
 const sigSet = s => { try { localStorage.setItem(SIGN_KEY, JSON.stringify(s)); } catch {} };
@@ -58,6 +87,7 @@ async function openOutreach(call, areas){
       <label class="note">Mensaje <span id="omDetailSt"></span><textarea id="omBody" rows="16" style="width:100%"></textarea></label>
       <div class="row" style="margin-top:8px"><button id="omCopySub">Copiar asunto</button><button id="omCopyBody">Copiar mensaje</button><button id="omRegen" title="Vuelve a generar el mensaje con la selección actual">Regenerar mensaje</button>
         <span style="flex:1"></span><a class="btn" id="omMailto" target="_blank" rel="noopener">Abrir en la app de correo</a><a class="btn gold" id="omGmail" target="_blank" rel="noopener">Abrir en Gmail</a></div>
+      <div class="row" style="margin-top:10px;align-items:center"><button class="primary" id="omLog">✓ Registrar como enviado</button><span class="note" id="omLogSt">${(() => { const L = OUTREACH.byOpp(call.id); return L.length ? `Ya registrado ${L.length} vez/veces; último el ${esc(new Date(L[0].created_at).toLocaleDateString("es"))} a ${fmt((L[0].recipients || []).length)} persona(s).` : "Regístralo después de enviarlo para darle seguimiento en Seguimiento → Envíos."; })()}</span></div>
       <p class="note" id="omSt"></p>
     </div></div>`;
   document.body.appendChild(back);
@@ -132,6 +162,18 @@ async function openOutreach(call, areas){
   $m("omCopySub").onclick = () => copy($m("omSubject").value, "El asunto");
   $m("omCopyBody").onclick = () => copy($m("omBody").value, "El mensaje");
   $m("omRegen").onclick = () => { S.dirty = false; drawBody(); };
+  $m("omLog").onclick = async () => {
+    const ch = chosen(); if (!ch.length){ $m("omLogSt").textContent = "Selecciona al menos una persona."; return; }
+    $m("omLog").disabled = true; $m("omLogSt").textContent = "Registrando…";
+    try {
+      await OUTREACH.log({ opp_id: String(call.id), opp_number: call.number, opp_title: call.title, agency: call.agency, close_date: call.closeDate || "",
+        opp_url: GRANTS.url(call), subject: $m("omSubject").value,
+        recipients: ch.map(x => ({ orcid: x.R.orcid, name: fullName(x.R), campus: x.R.affiliation.campus, email: emailsOf(x.R)[0] || "", status: "Sin respuesta" })) });
+      $m("omLogSt").textContent = `✓ Registrado: ${fmt(ch.length)} persona(s). Dale seguimiento en Seguimiento → Envíos.`;
+      document.dispatchEvent(new CustomEvent("outreach:changed"));
+    } catch(e){ $m("omLogSt").textContent = `✗ ${e.message}`; }
+    finally { $m("omLog").disabled = false; }
+  };
   $m("omBody").addEventListener("input", () => { S.dirty = true; drawLinks(); });
   $m("omSubject").addEventListener("input", drawLinks);
   back.querySelectorAll("[data-sig]").forEach(i => i.addEventListener("input", () => { S.sig[i.dataset.sig] = i.value; sigSet(S.sig); if (!S.dirty) drawBody(); }));
@@ -139,4 +181,56 @@ async function openOutreach(call, areas){
   $m("omDetailSt").textContent = "· buscando detalles en Grants.gov…";
   try { S.detail = await GRANTS.detail(call.id); $m("omDetailSt").textContent = ""; if (!S.dirty && document.body.contains(back)) drawBody(); }
   catch(e){ $m("omDetailSt").textContent = "· no se pudieron traer los detalles; el mensaje incluye el enlace al anuncio."; }
+}
+document.addEventListener("outreach:changed", () => { const n = parseHash().name; if (n === "oportunidades" || n === "seguimiento") route(); });
+
+/* ---------- Seguimiento → Envíos ---------- */
+const ENV = { q: "", resp: "", campus: "" };
+function drawEnvios(box){
+  const L = OUTREACH.list;
+  const allR = L.flatMap(x => (x.recipients || []).map(r => ({ ...r, entry: x })));
+  const tally = Object.fromEntries(RESP.map(s => [s, allR.filter(r => (r.status || "Sin respuesta") === s).length]));
+  box.innerHTML = `
+    <div class="kpis">${RESP.map(s => `<div class="kpi"><b>${fmt(tally[s])}</b><span>${esc(s)}</span></div>`).join("")}</div>
+    <div class="filters"><input type="search" id="envQ" placeholder="Buscar convocatoria o persona…" value="${esc(ENV.q)}">
+      <select id="envResp"><option value="">Cualquier respuesta</option>${RESP.map(s => `<option ${s === ENV.resp ? "selected" : ""}>${esc(s)}</option>`).join("")}</select>
+      <select id="envCampus"><option value="">Todos los recintos</option>${uniq(allR.map(r => r.campus)).sort().map(c => `<option ${c === ENV.campus ? "selected" : ""}>${esc(c)}</option>`).join("")}</select>
+      <button type="button" id="envCsv">Descargar CSV</button></div>
+    <div id="envList"></div>
+    ${OUTREACH.loaded ? "" : `<div class="notice">No se pudo cargar el registro de envíos. Recarga la página.</div>`}`;
+  const draw = () => {
+    const q = norm(ENV.q), today = new Date();
+    const rows = L.map(x => ({ x, rec: (x.recipients || []).filter(r => (!ENV.resp || (r.status || "Sin respuesta") === ENV.resp) && (!ENV.campus || r.campus === ENV.campus)
+        && (!q || norm(`${x.opp_title} ${x.opp_number} ${x.agency} ${r.name} ${r.email}`).includes(q))) })).filter(y => y.rec.length);
+    $("envList").innerHTML = !rows.length ? `<div class="empty"><b>${L.length ? "Ningún envío coincide con los filtros." : "Aún no hay envíos registrados."}</b>${L.length ? "" : "En Oportunidades, prepara un correo y pulsa «Registrar como enviado»."}</div>`
+      : rows.map(({ x, rec }) => { const d = GRANTS.date(x.close_date), days = d ? Math.ceil((d - today) / 864e5) : null;
+        return `<div class="card env-card" data-id="${esc(x.id)}" style="margin-bottom:12px">
+          <div class="row" style="justify-content:space-between;align-items:flex-start"><div><h3 style="margin:0"><a href="${esc(x.opp_url)}" target="_blank" rel="noopener">${esc(x.opp_title)}</a></h3>
+            <div class="note">${esc(x.agency)} · ${esc(x.opp_number)} · enviado el ${esc(new Date(x.created_at).toLocaleDateString("es"))} · fecha límite ${esc(x.close_date || "no indicada")}${days !== null ? (days >= 0 ? ` (faltan ${days} días)` : " (vencida)") : ""}</div></div>
+            <button class="btn ghost env-del" title="Borrar este registro">Borrar</button></div>
+          <table class="mini" style="margin-top:8px"><thead><tr><th>Persona</th><th>Recinto</th><th>Correo</th><th>Respuesta</th></tr></thead><tbody>
+          ${rec.map(r => `<tr><td><a href="#/investigador/${esc(r.orcid)}">${esc(r.name)}</a></td><td>${esc(r.campus || "")}</td><td>${r.email ? `<a href="mailto:${esc(r.email)}">${esc(r.email)}</a>` : "—"}</td>
+            <td><select class="env-st" data-o="${esc(r.orcid)}">${RESP.map(s => `<option ${s === (r.status || "Sin respuesta") ? "selected" : ""}>${esc(s)}</option>`).join("")}</select></td></tr>`).join("")}</tbody></table>
+          <label class="note">Nota <input type="text" class="env-note" value="${esc(x.note || "")}" style="width:100%" placeholder="p. ej., reunión el 20/11; equipo con Mayagüez"></label><small class="env-msg note"></small></div>`; }).join("");
+    $("envList").querySelectorAll(".env-card").forEach(card => {
+      const id = card.dataset.id, msg = card.querySelector(".env-msg");
+      const save = async () => { const x = OUTREACH.list.find(y => y.id === id); if (!x) return;
+        const st = new Map([...card.querySelectorAll(".env-st")].map(s => [s.dataset.o, s.value]));
+        const recipients = (x.recipients || []).map(r => st.has(r.orcid) ? { ...r, status: st.get(r.orcid) } : r);
+        msg.textContent = "guardando…";
+        try { await OUTREACH.update(id, recipients, card.querySelector(".env-note").value); msg.textContent = "✓ guardado"; }
+        catch(e){ msg.textContent = `✗ ${e.message}`; } };
+      card.querySelectorAll(".env-st, .env-note").forEach(i => i.addEventListener("change", save));
+      card.querySelector(".env-del").onclick = async () => { if (!confirm("¿Borrar este registro de envío?")) return; try { await OUTREACH.del(id); draw(); } catch(e){ msg.textContent = `✗ ${e.message}`; } };
+    });
+  };
+  const bind = (id, k) => $(id).addEventListener("input", e => { ENV[k] = e.target.value; draw(); });
+  bind("envQ", "q"); bind("envResp", "resp"); bind("envCampus", "campus");
+  $("envCsv").onclick = () => {
+    const qv = v => { const s = String(v ?? ""); return /[",\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+    const h = ["fecha_envio","convocatoria","numero","agencia","fecha_limite","persona","orcid","recinto","correo","respuesta","nota","enlace"];
+    const lines = [h.join(",")].concat(L.flatMap(x => (x.recipients || []).map(r => [x.created_at.slice(0, 10), x.opp_title, x.opp_number, x.agency, x.close_date, r.name, r.orcid, r.campus, r.email, r.status || "Sin respuesta", x.note || "", x.opp_url].map(qv).join(","))));
+    saveBlob(new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8" }), `upr_envios_convocatorias_${new Date().toISOString().slice(0,10)}.csv`);
+  };
+  draw();
 }

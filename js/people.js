@@ -46,8 +46,8 @@ function viewSeguimiento(el){
   const campuses = uniq(list.flatMap(campusOf)).sort();
   el.innerHTML = head(`${icon("users")} Seguimiento`, "Seguimiento de docentes y otros investigadores",
     "Docentes para dar seguimiento a sus propuestas, y otros perfiles para verificar con los recintos. Los correos, estados y notas solo los ve el administrador.",
-    `<span class="seg" id="segTab"><button data-t="docente" class="${SEG.tab === "docente" ? "on" : ""}">Docentes (${fmt(n.docente)})</button><button data-t="otro" class="${SEG.tab === "otro" ? "on" : ""}">Otros por verificar (${fmt(n.otro)})</button></span>`)
-    + (!list.length ? emptyState() : `
+    `<span class="seg" id="segTab"><button data-t="docente" class="${SEG.tab === "docente" ? "on" : ""}">Docentes (${fmt(n.docente)})</button><button data-t="otro" class="${SEG.tab === "otro" ? "on" : ""}">Otros por verificar (${fmt(n.otro)})</button><button data-t="envios" class="${SEG.tab === "envios" ? "on" : ""}">Envíos (${fmt(OUTREACH.list.length)})</button></span>`)
+    + (SEG.tab === "envios" ? `<div id="envBox"></div>` : !list.length ? emptyState() : `
     <div class="filters">
       <input type="search" id="segQ" placeholder="Buscar por nombre, departamento, cargo o correo…" value="${esc(SEG.q)}">
       <select id="segCampus"><option value="">Todos los recintos</option>${campuses.map(c => `<option ${c === SEG.campus ? "selected" : ""}>${esc(c)}</option>`).join("")}</select>
@@ -59,6 +59,7 @@ function viewSeguimiento(el){
     <p class="note" id="segCount"></p><div id="segList" class="tablewrap" style="max-height:none"></div><div class="pager" id="segPager"></div>
     <p class="note">El tipo es automático según el cargo en ORCID (Docente: profesor, catedrático, instructor, lecturer, faculty…). Al elegir un estado se corrige: «Docente confirmado» lo pasa a Docentes; cualquier otro estado lo deja en Otros. Los cambios se guardan solos y se conservan aunque vuelvas a cosechar.</p>`);
   $("segTab").onclick = e => { const b = e.target.closest("button"); if (!b) return; SEG.tab = b.dataset.t; SEG.page = 0; viewSeguimiento(el); };
+  if (SEG.tab === "envios") return drawEnvios($("envBox"));
   if (!list.length) return;
   const bind = (id, k, ev = "input", get = e => e.target.value) => $(id).addEventListener(ev, e => { SEG[k] = get(e); SEG.page = 0; drawSeg(); });
   bind("segQ", "q"); bind("segCampus", "campus"); bind("segEstado", "estado"); bind("segNoEmail", "noEmail", "change", e => e.target.checked);
@@ -85,7 +86,7 @@ function drawSeg(){
   $("segList").innerHTML = !slice.length ? `<div class="empty"><b>Nadie coincide con los filtros.</b></div>` : `<table class="mini seg-table"><thead><tr>
     <th>Persona</th><th>Recinto</th><th>Cargo y departamento (ORCID)</th><th>Correos</th><th>Estado</th><th>Nota</th></tr></thead><tbody>
     ${slice.map(R => { const N = PEOPLE.notes.get(R.orcid) || {}, orc = R.identity.emails || [], m = R.sources.openalex?.metrics;
-      return `<tr data-o="${esc(R.orcid)}"><td><a href="#/investigador/${esc(R.orcid)}"><b>${esc(fullName(R))}</b></a><br><small><a href="https://orcid.org/${esc(R.orcid)}" target="_blank" rel="noopener">${esc(R.orcid)}</a>${m ? ` · ${fmt(m.publications)} pubs` : ""}${R.manual ? " · añadido a mano" : ""}</small></td>
+      return `<tr data-o="${esc(R.orcid)}"><td><a href="#/investigador/${esc(R.orcid)}"><b>${esc(fullName(R))}</b></a><br><small><a href="https://orcid.org/${esc(R.orcid)}" target="_blank" rel="noopener">${esc(R.orcid)}</a>${m ? ` · ${fmt(m.publications)} pubs` : ""}${R.manual ? " · añadido a mano" : ""}${(() => { const k = OUTREACH.countFor(R.orcid); return k ? ` · <b>✉ ${k} oportunidad(es) enviada(s)</b>` : ""; })()}</small></td>
         <td>${esc(R.affiliation.campus)}</td><td>${esc(R.affiliation.role || "—")}<br><small>${esc(R.affiliation.dept || "")}</small></td>
         <td>${orc.length ? `<small title="Correo público en ORCID">${orc.map(esc).join("<br>")}</small><br>` : ""}<input type="text" class="seg-mail" placeholder="añadir correo(s)" value="${esc((N.emails || []).join(", "))}"></td>
         <td><select class="seg-estado"><option value="">— Sin revisar (${TYPE_LABEL[autoType(R)]}) —</option>${ESTADOS.map(s => `<option ${s === N.estado ? "selected" : ""}>${esc(s)}</option>`).join("")}</select></td>
@@ -107,10 +108,10 @@ function drawSeg(){
 }
 function segCSV(list){
   const q = v => { const s = String(v ?? ""); return /[",\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
-  const h = ["nombre","orcid","tipo","estado","recinto","departamento","cargo_orcid","correos","nota","publicaciones","citas","h_index","fondos_nih_nsf","añadido_a_mano"];
+  const h = ["nombre","orcid","tipo","estado","recinto","departamento","cargo_orcid","correos","nota","publicaciones","citas","h_index","fondos_nih_nsf","añadido_a_mano","oportunidades_enviadas"];
   const lines = [h.join(",")].concat(list.map(R => { const N = PEOPLE.notes.get(R.orcid) || {}, m = R.sources.openalex?.metrics || {};
     return [fullName(R), R.orcid, TYPE_LABEL[personType(R)], N.estado || "Sin revisar", R.affiliation.campus, R.affiliation.dept, R.affiliation.role, emailsOf(R).join("; "),
-      N.note || "", m.publications ?? "", m.citations ?? "", m.h_index ?? "", Math.round(R.capacity?.funding_record?.total_amount || 0), R.manual ? "sí" : ""].map(q).join(","); }));
+      N.note || "", m.publications ?? "", m.citations ?? "", m.h_index ?? "", Math.round(R.capacity?.funding_record?.total_amount || 0), R.manual ? "sí" : "", OUTREACH.countFor(R.orcid)].map(q).join(","); }));
   saveBlob(new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8" }),
     `upr_${SEG.tab === "docente" ? "docentes" : "otros_por_verificar"}${SEG.campus ? "_" + slug(SEG.campus) : ""}_${new Date().toISOString().slice(0,10)}.csv`);
 }

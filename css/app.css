@@ -268,3 +268,5 @@ table.seg-table .seg-st{display:block;color:var(--muted);font-size:11px;min-heig
 .om-sig-fields input{width:100%}
 .om-btn{margin-top:8px;font-size:12px;padding:5px 9px}
 .om-addmail{margin-top:3px;width:100%;font-size:12px;padding:4px 6px}
+.om-sent{margin-top:6px;font-size:11px;color:#0f766e;font-weight:600}
+.env-card .mini select{font-size:12px}
