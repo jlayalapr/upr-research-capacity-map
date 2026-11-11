@@ -191,7 +191,8 @@ function drawEnvios(box){
   const allR = L.flatMap(x => (x.recipients || []).map(r => ({ ...r, entry: x })));
   const tally = Object.fromEntries(RESP.map(s => [s, allR.filter(r => (r.status || "Sin respuesta") === s).length]));
   box.innerHTML = `
-    <div class="kpis">${RESP.map(s => `<div class="kpi"><b>${fmt(tally[s])}</b><span>${esc(s)}</span></div>`).join("")}</div>
+    <div class="kpis"><div class="kpi kpi-total"><b>${fmt(allR.length)}</b><span>Enviados · ${fmt(L.length)} convocatoria(s) a ${fmt(uniq(allR.map(r => r.orcid)).length)} persona(s)</span></div>
+      ${RESP.map(s => `<div class="kpi"><b>${fmt(tally[s])}</b><span>${esc(s)}${allR.length ? ` · ${Math.round(100 * tally[s] / allR.length)}%` : ""}</span></div>`).join("")}</div>
     <div class="filters"><input type="search" id="envQ" placeholder="Buscar convocatoria o persona…" value="${esc(ENV.q)}">
       <select id="envResp"><option value="">Cualquier respuesta</option>${RESP.map(s => `<option ${s === ENV.resp ? "selected" : ""}>${esc(s)}</option>`).join("")}</select>
       <select id="envCampus"><option value="">Todos los recintos</option>${uniq(allR.map(r => r.campus)).sort().map(c => `<option ${c === ENV.campus ? "selected" : ""}>${esc(c)}</option>`).join("")}</select>
