@@ -66,7 +66,7 @@ function outreachCandidates(call, areas){
 async function openOutreach(call, areas){
   document.querySelector(".modal-back")?.remove();
   const cands = outreachCandidates(call, areas);
-  const sel = new Set(cands.filter(x => personType(x.R) === "docente").slice(0, 10).map(x => x.R.orcid));
+  const sel = new Set(cands.length === 1 ? [cands[0].R.orcid] : cands.filter(x => personType(x.R) === "docente").slice(0, 10).map(x => x.R.orcid));
   const S = { sig: { name: "", title: "", office: "", email: "", phone: "", ...sigGet() }, bcc: false, others: false, dirty: false, detail: null };
   const back = document.createElement("div"); back.className = "modal-back";
   back.innerHTML = `<div class="modal" role="dialog" aria-modal="true" aria-label="Preparar correo">
@@ -182,7 +182,7 @@ async function openOutreach(call, areas){
   try { S.detail = await GRANTS.detail(call.id); $m("omDetailSt").textContent = ""; if (!S.dirty && document.body.contains(back)) drawBody(); }
   catch(e){ $m("omDetailSt").textContent = "· no se pudieron traer los detalles; el mensaje incluye el enlace al anuncio."; }
 }
-document.addEventListener("outreach:changed", () => { const n = parseHash().name; if (n === "oportunidades" || n === "seguimiento") route(); });
+document.addEventListener("outreach:changed", () => { const n = parseHash().name; if (n === "oportunidades" || n === "seguimiento" || n === "investigador") route(); });
 
 /* ---------- Seguimiento → Envíos ---------- */
 const ENV = { q: "", resp: "", campus: "" };
@@ -234,4 +234,38 @@ function drawEnvios(box){
     saveBlob(new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8" }), `upr_envios_convocatorias_${new Date().toISOString().slice(0,10)}.csv`);
   };
   draw();
+}
+
+/* ---------- Perfil → Oportunidades para este investigador ---------- */
+async function profileOpps(R, box){
+  const sigs = (R.capacity?.funding_signals || []).filter(f => GRANTS_QUERIES[f.capacity]).sort((a, b) => (b.validated ? 1 : 0) - (a.validated ? 1 : 0) || b.confidence - a.confidence).slice(0, 5);
+  const sent = AUTH.isAdmin() ? OUTREACH.list.filter(x => (x.recipients || []).some(r => r.orcid === R.orcid)) : [];
+  const hist = sent.length ? `<div class="notice" style="margin-bottom:12px"><b>Oportunidades ya enviadas (${fmt(sent.length)}):</b><ul>${sent.map(x => { const r = x.recipients.find(y => y.orcid === R.orcid);
+    return `<li><a href="${esc(x.opp_url)}" target="_blank" rel="noopener">${esc(x.opp_title)}</a> · enviado el ${esc(new Date(x.created_at).toLocaleDateString("es"))} · <b>${esc(r?.status || "Sin respuesta")}</b></li>`; }).join("")}</ul><a href="#/seguimiento" onclick="SEG.tab='envios'">Ver en Seguimiento → Envíos</a></div>` : "";
+  if (!sigs.length){ box.innerHTML = hist + `<p class="note">Aún no hay áreas de financiamiento inferidas para este perfil (requiere enriquecer con OpenAlex o tener proyectos NIH/NSF vinculados).</p>`; return; }
+  box.innerHTML = hist + `<p class="note">Convocatorias abiertas o anunciadas en <a href="https://www.grants.gov" target="_blank" rel="noopener">Grants.gov</a> para sus áreas: ${sigs.map(s => `<span class="tag ${s.validated ? "green" : "gold"}">${esc(s.capacity)}${s.validated ? " ✓" : ""}</span>`).join("")} ${SRC.inf}</p><p class="note" id="poSt">Buscando convocatorias…</p><div class="card" style="padding:0;box-shadow:none" id="poList"></div>`;
+  const calls = new Map(), errors = [];
+  await pool(sigs, 3, async s => {
+    try { for (const o of await GRANTS.search(GRANTS_QUERIES[s.capacity])){ const c = calls.get(o.id) || calls.set(o.id, { ...o, areas: [] }).get(o.id); if (!c.areas.includes(s.capacity)) c.areas.push(s.capacity); } }
+    catch(e){ errors.push(e.message); }
+  });
+  if (!document.body.contains(box)) return;
+  if (!calls.size){ $("poSt").innerHTML = errors.length ? `<span style="color:#c0352f">No se pudo consultar Grants.gov: ${esc(errors[0])}</span>` : "No hay convocatorias abiertas para estas áreas en este momento."; return; }
+  const now = new Date(), list = [...calls.values()].sort((a, b) => (b.areas.length - a.areas.length) || ((GRANTS.date(a.closeDate)?.getTime() ?? 9e15) - (GRANTS.date(b.closeDate)?.getTime() ?? 9e15)));
+  $("poSt").textContent = `${fmt(list.length)} convocatoria(s) · primero las que coinciden con más de sus áreas, luego por fecha límite.`;
+  const sig = new Map(sigs.map(s => [s.capacity, s]));
+  $("poList").innerHTML = list.slice(0, 60).map(c => {
+    const d = GRANTS.date(c.closeDate), days = d ? Math.ceil((d - now) / 864e5) : null;
+    const was = sent.filter(x => x.opp_id === String(c.id));
+    return `<div class="item"><div class="agency ${esc(GRANTS.badge(c))}">${esc(GRANTS.badge(c))}</div>
+      <div><h3><a href="${esc(GRANTS.url(c))}" target="_blank" rel="noopener">${esc(c.title)}</a> <span class="note">(${esc(c.number)})</span></h3>
+        <div class="meta">${esc(c.agency)} · ${c.status === "forecasted" ? "Anunciada (pronóstico)" : "Abierta"}${c.openDate ? " desde " + esc(c.openDate) : ""}</div>
+        <div style="margin:6px 0">${c.areas.map(l => `<span class="tag">${esc(l)}</span>`).join("")}</div></div>
+      <div class="deadline ${days !== null && days <= 30 ? "soon" : ""}">Fecha límite<b>${d ? esc(c.closeDate) : (c.status === "forecasted" ? "Por anunciar" : "Continua / no indicada")}</b>${days !== null && days >= 0 ? `${days} día(s)` : ""}
+        ${AUTH.isAdmin() ? `<div><button class="btn om-btn" data-pmail="${esc(c.id)}">✉ Preparar correo</button></div>${was.length ? `<div class="om-sent">✉ Enviado ${esc(new Date(was[0].created_at).toLocaleDateString("es"))}</div>` : ""}` : ""}</div></div>`; }).join("");
+  box.querySelectorAll("[data-pmail]").forEach(b => b.onclick = () => {
+    const c = calls.get(b.dataset.pmail);
+    const areas = new Map(c.areas.map(l => [l, { people: [{ R, conf: sig.get(l)?.confidence || 0, validated: !!sig.get(l)?.validated }] }]));
+    openOutreach(c, areas);
+  });
 }

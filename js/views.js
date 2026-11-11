@@ -172,7 +172,7 @@ function drawInv(){
 }
 
 /* =============================== PERFIL =============================== */
-const PTABS = [["resumen","Resumen"],["proyectos","Proyectos"],["publicaciones","Publicaciones"],["capacidades","Capacidades"],["colaboraciones","Colaboraciones"],["fuentes","Fuentes y evidencia"]];
+const PTABS = [["resumen","Resumen"],["proyectos","Proyectos"],["publicaciones","Publicaciones"],["capacidades","Capacidades"],["colaboraciones","Colaboraciones"],["oportunidades","Oportunidades"],["fuentes","Fuentes y evidencia"]];
 function summaryText(R){
   const P = R.capacity, m = R.sources.openalex?.metrics, out = [];
   if (!P) return "Aún no hay evidencia bibliográfica ni de financiamiento vinculada a este perfil.";
@@ -244,6 +244,8 @@ function viewInvestigador(el, r){
     box.innerHTML = !C ? `<p class="note">Sin datos de coautoría (requiere OpenAlex).</p>` : `<div class="grid2 even"><div><h3 style="margin-top:0">Coautores principales ${SRC.oa}</h3>${collabList(C.top_coauthors)}</div>
       <div><h3 style="margin-top:0">Instituciones colaboradoras</h3><ul class="pubs">${C.institutions.map(i => `<li>${esc(i.name)} <span class="m">· ${i.works} trabajo(s)${i.country ? " · " + esc(i.country) : ""}</span>${i.upr ? ' <span class="pill">UPR</span>' : ""}</li>`).join("") || "<li class='note'>—</li>"}</ul>
       <p class="note">Recintos UPR: ${C.upr_campuses.map(c => `${esc(c.campus)} (${c.works})`).join(" · ") || "—"}<br>Colaboración internacional: ${Math.round(C.international.share*100)}% de los trabajos · ${C.frequency.mean_coauthors} coautores en promedio</p></div></div>`;
+  } else if (tab === "oportunidades"){
+    profileOpps(R, box);
   } else {
     box.innerHTML = tabFicha(R) + tabEvidence(R);
   }
