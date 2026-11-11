@@ -39,7 +39,7 @@ const AV_COLORS = ["#123a78","#1d5fa8","#0e6b74","#5b3f9e","#8a4b12","#1f6a3a"];
 const avatar = (R, cls="") => `<div class="avatar ${cls}" style="background:${AV_COLORS[parseInt(hsh(R.orcid), 36) % AV_COLORS.length]}" aria-hidden="true">${esc(initials(R).toUpperCase())}</div>`;
 const listES = a => a.length <= 1 ? (a[0]||"") : a.slice(0,-1).join(", ") + " y " + a[a.length-1];
 const campusOf = R => R.affiliation.campus.split(" | ");
-const emailOf = R => (R.identity.emails||[])[0] || "";
+const emailOf = R => (typeof emailsOf === "function" ? emailsOf(R) : (R.identity.emails||[]))[0] || "";
 const head = (crumb, title, sub, actions="") => `<div class="view-head"><div><div class="crumbs">${crumb}</div><h1>${esc(title)}</h1>${sub ? `<p>${sub}</p>` : ""}</div>${actions ? `<div class="actions">${actions}</div>` : ""}</div>`;
 const emptyState = (msg="Aún no hay datos.") => `<div class="empty"><b>${esc(msg)}</b>${AUTH.isAdmin() ? `Ve a <a href="#/admin">Administración</a> para ejecutar el harvest.` : "Un administrador debe ejecutar el harvest para cargar los datos."}</div>`;
 const actLabel = s => ACT_ES[s] || s || "—";
@@ -114,7 +114,7 @@ function viewInicio(el){
 }
 
 /* ============================ INVESTIGADORES ============================ */
-const INV = { q:"", campus:"", field:"", cap:"", status:"", mode:"list", page:0, per:30 };
+const INV = { q:"", campus:"", field:"", cap:"", status:"", type:"", mode:"list", page:0, per:30 };
 function viewInvestigadores(el, r){
   const S = sys();
   if (r.q.get("campus") !== null) { INV.campus = r.q.get("campus"); INV.page = 0; }
@@ -130,13 +130,14 @@ function viewInvestigadores(el, r){
       <select id="invCampus"><option value="">Recinto</option>${[...CAMPUSES, GENERAL].map(c => c.name).filter(n => S.list.some(R => campusOf(R).includes(n))).map(n => opt(n, INV.campus)).join("")}</select>
       <select id="invField"><option value="">Área de investigación</option>${fields.map(f => opt(f, INV.field)).join("")}</select>
       <select id="invCap"><option value="">Capacidad</option>${caps.map(c => opt(c, INV.cap)).join("")}</select>
+      <select id="invType"><option value="">Docentes y otros</option>${opt("docente", INV.type, "Docentes")}${opt("otro", INV.type, "Otros (por verificar)")}</select>
       <select id="invStatus"><option value="">Estado</option>${["Active researcher","Recently active","Historically active","Active researcher (funding)"].map(s => opt(s, INV.status, actLabel(s))).join("")}</select>
       <span class="seg" id="invMode"><button data-m="list" class="${INV.mode === "list" ? "on" : ""}" aria-label="Lista">${icon("list")}</button><button data-m="grid" class="${INV.mode === "grid" ? "on" : ""}" aria-label="Cuadrícula">${icon("grid")}</button></span>
     </div>
     <p class="note" id="invCount"></p><div id="invList"></div><div class="pager" id="invPager"></div>`);
   if (!S.list.length) return;
   const bind = (id, k) => $(id).addEventListener("input", e => { INV[k] = e.target.value; INV.page = 0; drawInv(); });
-  bind("invQ","q"); bind("invCampus","campus"); bind("invField","field"); bind("invCap","cap"); bind("invStatus","status");
+  bind("invQ","q"); bind("invCampus","campus"); bind("invField","field"); bind("invCap","cap"); bind("invStatus","status"); bind("invType","type");
   $("invMode").onclick = e => { const b = e.target.closest("button"); if (!b) return; INV.mode = b.dataset.m; $("invMode").querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b)); drawInv(); };
   $("invPager").onclick = e => { const b = e.target.closest("[data-pg]"); if (!b) return; INV.page = Number(b.dataset.pg); drawInv(); window.scrollTo({top:0, behavior:"smooth"}); };
   drawInv();
@@ -151,6 +152,7 @@ function drawInv(){
     (!INV.campus || campusOf(R).includes(INV.campus)) &&
     (!INV.field || R.capacity?.primary_field?.capacity === INV.field) &&
     (!INV.status || R.capacity?.activity?.status === INV.status) &&
+    (!INV.type || personType(R) === INV.type) &&
     (!INV.cap || (R.capacity?.evidence||[]).some(e => e.capacity === INV.cap && e.confidence >= 0.4)) &&
     (!q || norm([fullName(R), R.affiliation.dept, R.affiliation.role, R.orcid, ...(R.capacity?.evidence||[]).map(e => e.capacity)].join(" ")).includes(q)));
   list.sort((a,b) => (a.identity.family + a.identity.given).localeCompare(b.identity.family + b.identity.given, "es"));
@@ -164,7 +166,7 @@ function drawInv(){
     : INV.mode === "grid"
     ? `<div class="rgrid">${slice.map(R => `<div class="rcard"><div class="top">${avatar(R)}<div><a href="#/investigador/${esc(R.orcid)}">${esc(fullName(R))}</a><div class="note">UPR ${esc(R.affiliation.campus)}</div></div></div>
         <div>${tags(R)}</div>${icons(R)}</div>`).join("")}</div>`
-    : `<div class="rlist">${slice.map(R => `<div class="rrow">${avatar(R)}<div class="who"><a href="#/investigador/${esc(R.orcid)}"><b>${esc(fullName(R))}</b></a><small>UPR ${esc(R.affiliation.campus)}${R.affiliation.dept ? " · " + esc(R.affiliation.dept) : ""}</small></div>
+    : `<div class="rlist">${slice.map(R => `<div class="rrow">${avatar(R)}<div class="who"><a href="#/investigador/${esc(R.orcid)}"><b>${esc(fullName(R))}</b></a><small>UPR ${esc(R.affiliation.campus)}${R.affiliation.dept ? " · " + esc(R.affiliation.dept) : ""}${personType(R) === "otro" ? ' · <span class="pill warn" title="Cargo no docente o sin cargo en ORCID">por verificar</span>' : ""}</small></div>
         <div class="tags">${tags(R)}</div>${icons(R)}</div>`).join("")}</div>`;
   $("invPager").innerHTML = pages > 1 ? `<button data-pg="${INV.page-1}" ${INV.page ? "" : "disabled"}>‹ Anterior</button><span class="note">Página ${INV.page+1} de ${pages}</span><button data-pg="${INV.page+1}" ${INV.page < pages-1 ? "" : "disabled"}>Siguiente ›</button>` : "";
 }
@@ -481,13 +483,14 @@ function route(){
   if (!r.name) return showScreen("landing");
   if (r.name === "acceso") return showGate(r.q.get("admin") ? "admin" : "viewer", r.q.get("next"));
   if (!ROUTES[r.name]){ location.hash = "#/inicio"; return; }
-  if (r.name === "admin" && !AUTH.isAdmin()){ location.replace(`#/acceso?admin=1&next=${encodeURIComponent("#/admin")}`); return; }
+  if ((r.name === "admin" || r.name === "seguimiento") && !AUTH.isAdmin()){ location.replace(`#/acceso?admin=1&next=${encodeURIComponent("#/" + r.name)}`); return; }
   if (!AUTH.canView()){ location.replace(`#/acceso?next=${encodeURIComponent(location.hash)}`); return; }
   showScreen("app");
   document.querySelectorAll("#views > .view").forEach(v => v.hidden = v.dataset.view !== r.name);
   document.querySelectorAll(".side a.nav").forEach(a => a.classList.toggle("on", a.dataset.r === (r.name === "investigador" ? "investigadores" : r.name === "buscar" ? "" : r.name)));
   $("app").classList.remove("nav-open");
   $("userName").textContent = AUTH.isAdmin() ? "Administrador" : "Visitante";
+  { const sg = document.querySelector('.side a.nav[data-r="seguimiento"]'); if (sg) sg.hidden = !AUTH.isAdmin(); }
   $("userRole").textContent = AUTH.isAdmin() ? "Harvest y actualización" : "Acceso de consulta";
   $("userAv").textContent = AUTH.isAdmin() ? "A" : "V";
   $("dataStamp").textContent = STORE.savedAt ? `Datos: ${new Date(STORE.savedAt).toLocaleDateString("es")}` : "";

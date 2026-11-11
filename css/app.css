@@ -248,3 +248,7 @@ table.heat td[data-pcell]:hover{outline:2px solid var(--s1)}
 table.mini td.num, table.mini th.num{text-align:right}
 .tablewrap{overflow-x:auto;max-width:100%}
 @media (max-width:560px){ .topbar{gap:8px} .topbar .t-search{min-width:0} .user-chip{gap:6px;flex-shrink:0} .user-chip .avatar{display:none} }
+.side a.nav[hidden]{display:none}
+table.seg-table input[type=text]{width:100%;min-width:150px;font-size:12px;padding:5px 7px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink)}
+table.seg-table select{max-width:210px;font-size:12px}
+table.seg-table .seg-st{display:block;color:var(--muted);font-size:11px;min-height:14px}
